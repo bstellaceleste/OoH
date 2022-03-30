@@ -11,8 +11,8 @@ This repo provides the tools aand directives to evaluate SPML and EPML implement
 
 To facilitate the tests, the following material is provided:
 - [Xen 4.10 patched](xen-OoH)
-- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take a while (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
-- The use case [Boehm GC](bohem-OoH) patched
+- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
+- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH).
 - A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with the Xen tools installed for PML activation from the guest.
 
 ### Environment Setup
@@ -24,27 +24,53 @@ To facilitate the tests, the following material is provided:
 
 2. Support for PML feature: 
     * `sudo modprobe msr`
-    * `sudo rdmsr 0x48BH` : if PML is supported, bit at position **49** will be set
+    * `sudo rdmsr 0x48BH` : if PML is supported, bit at position **49** will be set.
 
-3. Dependencies for Xen:
+3. Dependencies for Xen, ssh and nfs:
    ```
    sudo apt update
-   sudo apt-get build-dep xen
+   sudo apt build-dep xen
    sudo apt install libc6-dev libglib2.0-dev libyajl-dev yajl-tools libbz2-dev bison flex zlib1g-dev git-core debhelper debconf-utils debootstrap fakeroot gcc make binutils  liblz-dev  python-dev libncurses-dev libcurl4-openssl-dev libx11-dev uuid-dev libaio-dev pkg-config bridge-utils udev bison flex gettext bin86 bcc iasl gcc-multilib libperl-dev libgtk2.0-dev
+   sudo apt install openssh-common openssh-client
+   sudo apt install nfs-common nfs-kernel-server
    ```
+4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independant from the user's `$HOME` environment it allows easier portability and deployment.
    
 #### Xen Installation
-> All commands in sudo (_this might take a while_)
+> All commands in sudo (_compilation and installaion might take a while_)
 ```
+cd /mnt/tmp/xen-OoH
 ./configure
 make
 make install
 ldconfig
 update-grub
 ```
-After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`.
+After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`).
 To start Xen demon, type the following commands: `sudo /etc/init.d/xencommons start`.
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
 #### VM Creation
-A configuration [file](vm.cfg) is provided to launch the VM: `sudo xl create vm.cfg`
+A configuration [file](vm.cfg) is provided to create a VM.
+
+You must first fill the correct **absolute** path to the VM image.
+
+After which you can use the following command: `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
+
+To access the VM, you need to create and configure a bridge:
+```
+sudo brctl addbr xenbr0
+sudo ifconfig xenbr0 10.0.0.1
+```
+To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo routing.sh ethX`.
+
+#### Accessing the VM
+When the VM has completely booted (its state is `r` -for _ready_- in the list), you can access it via ssh: `ssh stella@10.0.0.2`. The password is `toto`.
+
+The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
+
+#### Boehm GC Compilation
+Boehm is compiled in the VM as follows:
+```
+
+```
