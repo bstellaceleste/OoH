@@ -123,10 +123,12 @@ sudo make
 **3. Execute applications**
 
 All applications are in the `tests` dir, and datasets required are available in each bench's folder when applicable.
+> From boehm-OoH/Use_Case_Apps
 
    * histogram
      ```
      cd tests/histogram
+     unzip -d . dataset.zip
      ./histogram dataset/large.bmp
      ```
    * kmeans
@@ -142,10 +144,17 @@ All applications are in the `tests` dir, and datasets required are available in 
    * string_match
      ```
      cd tests/string_match
+     unzip -d . dataset.zip
      ./string_match dataset/key_file_200MB.txt
      ```
    * word_count
      ```
      cd tests/word_count
+     unzip -d . dataset.zip
      ./word_count dataset/word_100MB.txt
+     ```
+   * GCBench
+     ```
+     cd gcbench
+     gcc -o GCBench GCBench.c
      ```
