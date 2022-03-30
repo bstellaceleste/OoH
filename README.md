@@ -10,7 +10,7 @@ This repo provides the tools aand directives to test SPML and EPML implementatio
 # Overview
 
 We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML (noted EPML). SPML requires no hardware modification, while EPML slightly extends the hardware for better performance. The following figure presents the architecture of the two solutions. In the guest, we provide OoH as a userspace I/O (UIO) driver composed of a kernel module (OoH Module) and a userspace library (OoH Lib). At load time, the former does a set of initialization operations, including ring buffer (RB) allocation that is shared with userspace (and the hypervisor in SMPL only). Tracker uses OoH Lib to register the PID of Tracked with OoH Module. From there on, the processor can log dirty pages’ addresses to a 512KB PML buffer, which is copied to RB once full. Relying on OoH Lib, Tracker can periodically fetch the collected addresses to achieve its goal (e.g., checkpointing). EPML differs from SPML in two ways: (1) With EPML, the processor also logs GVAs, thus avoiding costly reverse mapping in OhH Lib; (2) With EPML, the guest kernel can directly deal with the processor, thus avoiding costly hypercalls. 
-
+![design](design.png)
 
 ## Shadow PML (SPML)
 
@@ -75,7 +75,25 @@ When the VM has completely booted (its state is `r` -for _ready_- in the list), 
 The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
 
 #### Boehm GC Compilation
-Boehm is compiled in the VM as follows:
+Boehm is compiled in the VM (from `$HOME`) as follows:
 ```
+cd boehm
+sudo ./configure --disable-threads --prefix=/home/stella/boehm/Use_Case_Apps/phoenix-2.0 --enable-static --enable-checksums --enable-mmap --disable-munmap --disable-shared
+sudo make
+sudo make install
+```
+Once installed, export GC-specific environment variables to enable incremental collection and statistics print:
+```
+GC_ENABLE_INCREMENTAL='GC_ENABLE_INCREMENTAL'
+GC_PRINT_VERBOSE_STATS='GC_PRINT_VERBOSE_STATS'
+GC_USE_GETWRITEWATCH='GC_USE_GETWRITEWATCH'
+export GC_ENABLE_INCREMENTAL
+export GC_PRINT_VERBOSE_STATS
+export GC_USE_GETWRITEWATCH
+```
+> Note: These variables should be exported at each reboot, otherwhise defined in an env file.
 
-```
+#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
+Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
+
+
