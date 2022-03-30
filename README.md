@@ -165,4 +165,17 @@ unzip -d test/word_count/dataset datasets/dataset_word
      ```
      cd gcbench
      gcc -o GCBench GCBench.c
+     ./GCBench
      ```
+
+#### Comparison With `/proc`
+
+`/proc` is the default technique implemented in Boehm. To perform tests with the latter:
+   * edit the file `boehm-OoH/include/private/gcconfig.h`
+   * comment the lines:
+   ```
+   #       ifndef PML_VDB
+   #         define PML_VDB
+   #       endif
+   ```
+   * recompile boehm as previously explained and re-execute the applications.
