@@ -1,0 +1,28 @@
+Garbage Collector Test
+ Live storage will peak at 10291408 bytes.
+
+ Stretching memory with a binary tree of depth 18
+ Creating a long-lived binary tree of depth 16
+ Creating a long-lived array of 500000 doubles
+Creating 33824 trees of depth 4
+	Top down construction took 21 msec
+	Bottom up construction took 20 msec
+Creating 8256 trees of depth 6
+	Top down construction took 20 msec
+	Bottom up construction took 20 msec
+Creating 2052 trees of depth 8
+	Top down construction took 20 msec
+	Bottom up construction took 20 msec
+Creating 512 trees of depth 10
+	Top down construction took 22 msec
+	Bottom up construction took 21 msec
+Creating 128 trees of depth 12
+	Top down construction took 23 msec
+	Bottom up construction took 22 msec
+Creating 32 trees of depth 14
+	Top down construction took 24 msec
+	Bottom up construction took 24 msec
+Creating 8 trees of depth 16
+	Top down construction took 30 msec
+	Bottom up construction took 25 msec
+Completed in 342 msec

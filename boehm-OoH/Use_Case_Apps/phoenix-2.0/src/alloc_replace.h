@@ -1,0 +1,1 @@
+#define realloc(p,n) GC_REALLOC((p),(n))

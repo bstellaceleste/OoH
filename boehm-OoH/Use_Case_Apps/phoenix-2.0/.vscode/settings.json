@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "stddefines.h": "c",
+        "alloc_replace.h": "c"
+    }
+}

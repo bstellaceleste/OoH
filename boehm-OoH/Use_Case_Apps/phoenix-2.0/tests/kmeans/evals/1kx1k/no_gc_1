@@ -1,0 +1,24 @@
+Dimension = 1000
+Number of clusters = 1000
+Number of points = 1000
+Size of each dimension = 100
+KMeans: Calling MapReduce Scheduler
+initialize: 21692
+library init: 70
+[Phoenix] num_map_tasks = 63
+map phase: 280535
+reduce phase: 2335
+merge phase: 283
+library finalize: 5
+library init: 3
+[Phoenix] num_map_tasks = 63
+map phase: 292318
+reduce phase: 2217
+merge phase: 281
+library finalize: 5
+library: 578089
+inter library: 25
+
+KMeans: MapReduce Completed
+finalize: 458
+kmeans took: 600276 µs

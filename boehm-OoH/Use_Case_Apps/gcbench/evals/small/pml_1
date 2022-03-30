@@ -1,0 +1,197 @@
+Using pml-dirty bit feature--2
+pid_list[0] : 1112
+xc_vtf
+Grew heap sections array to 32 elements
+Initiating full world-stop collection! -------------------
+0 bytes in heap blacklisted for interior pointers
+
+--> Marking for collection #1 after 0 allocated bytes
+Collect and reverse mapping took : 12 ms 456603 ns
+ #addresses reversed : 2003
+Checked 1 clean and 15 dirty pages
+mark_state : 5
+GC #1 freed 0 bytes, heap 64 KiB (+ 6336 KiB internal)
+World-stopped marking took 13 ms 122916 ns (13 ms in average)
+Complete collection since start took 13122.916000 µs
+In-use heap: 0% (0 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1390 ns + 0 ms 4512 ns
+Complete collection took 13 ms 144186 ns
+Garbage Collector Test
+ Live storage will peak at 10291408 bytes.
+
+ Stretching memory with a binary tree of depth 18
+
+--> Marking for collection #2 after 120128 allocated bytes
+Checked 31 clean and 1 dirty pages
+Found 16 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #2 freed 0 bytes, heap 128 KiB (+ 6336 KiB internal)
+World-stopped marking took 0 ms 61232 ns (6 ms in average)
+Complete collection since start took 13184.148000 µs
+In-use heap: 90% (116 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 596 ns + 0 ms 4437 ns
+
+--> Marking for collection #3 after 159744 allocated bytes
+Checked 70 clean and 17 dirty pages
+Found 2 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #3 freed 1408 bytes, heap 348 KiB (+ 6336 KiB internal)
+World-stopped marking took 0 ms 89769 ns (4 ms in average)
+Complete collection since start took 13273.917000 µs
+In-use heap: 78% (272 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 596 ns + 0 ms 4432 ns
+***>Full mark for collection #4 after 212992 allocd bytes
+4096 bytes in heap blacklisted for interior pointers
+Disposing of reclaim lists took 0 ms 464 ns
+
+--> Marking for collection #4 after 212992 allocated bytes
+Checked 122 clean and 35 dirty pages
+Found 18 dirty bit errors (0 were faulted)
+mark_state : 5
+GC #4 freed 4096 bytes, heap 628 KiB (+ 6336 KiB internal)
+World-stopped marking took 0 ms 231658 ns (3 ms in average)
+Complete collection since start took 13505.575000 µs
+In-use heap: 76% (480 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 501 ns + 0 ms 4899 ns
+
+--> Marking for collection #5 after 286720 allocated bytes
+Checked 192 clean and 18 dirty pages
+Found 36 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #5 freed 4096 bytes, heap 840 KiB (+ 6400 KiB internal)
+World-stopped marking took 0 ms 147016 ns (2 ms in average)
+Complete collection since start took 13652.591000 µs
+In-use heap: 90% (760 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 491 ns + 0 ms 5400 ns
+
+--> Marking for collection #6 after 380928 allocated bytes
+Checked 285 clean and 90 dirty pages
+Found 19 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #6 freed 4096 bytes, heap 1500 KiB (+ 6400 KiB internal)
+World-stopped marking took 0 ms 283859 ns (2 ms in average)
+Complete collection since start took 13936.450000 µs
+In-use heap: 75% (1132 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 408 ns + 0 ms 6251 ns
+***>Full mark for collection #7 after 507904 allocd bytes
+0 bytes in heap blacklisted for interior pointers
+Disposing of reclaim lists took 0 ms 393 ns
+
+--> Marking for collection #7 after 507904 allocated bytes
+Checked 409 clean and 92 dirty pages
+Found 91 dirty bit errors (0 were faulted)
+mark_state : 5
+GC #7 freed 4096 bytes, heap 2004 KiB (+ 6400 KiB internal)
+World-stopped marking took 0 ms 656651 ns (1 ms in average)
+Complete collection since start took 14593.101000 µs
+In-use heap: 81% (1628 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 443 ns + 0 ms 9296 ns
+
+--> Marking for collection #8 after 675840 allocated bytes
+Checked 573 clean and 96 dirty pages
+Found 94 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #8 freed 4096 bytes, heap 2676 KiB (+ 6400 KiB internal)
+World-stopped marking took 0 ms 484952 ns (1 ms in average)
+Complete collection since start took 15078.053000 µs
+In-use heap: 85% (2288 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 689 ns + 0 ms 10830 ns
+
+--> Marking for collection #9 after 901120 allocated bytes
+Checked 793 clean and 100 dirty pages
+Found 97 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #9 freed 0 bytes, heap 3572 KiB (+ 6464 KiB internal)
+World-stopped marking took 0 ms 547546 ns (1 ms in average)
+Complete collection since start took 15625.599000 µs
+In-use heap: 88% (3168 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 554 ns + 0 ms 12584 ns
+***>Full mark for collection #10 after 1204224 allocd bytes
+0 bytes in heap blacklisted for interior pointers
+Disposing of reclaim lists took 0 ms 431 ns
+
+--> Marking for collection #10 after 1204224 allocated bytes
+Checked 1087 clean and 104 dirty pages
+Found 101 dirty bit errors (0 were faulted)
+mark_state : 5
+GC #10 freed 0 bytes, heap 4764 KiB (+ 6464 KiB internal)
+World-stopped marking took 2 ms 744802 ns (1 ms in average)
+Complete collection since start took 18370.401000 µs
+In-use heap: 91% (4344 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 2025 ns + 0 ms 32506 ns
+
+--> Marking for collection #11 after 1605632 allocated bytes
+Checked 1479 clean and 110 dirty pages
+Found 105 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #11 freed 0 bytes, heap 6356 KiB (+ 6528 KiB internal)
+World-stopped marking took 1 ms 853645 ns (1 ms in average)
+Complete collection since start took 20224.046000 µs
+In-use heap: 93% (5912 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1250 ns + 0 ms 34022 ns
+
+--> Marking for collection #12 after 2138112 allocated bytes
+Checked 2001 clean and 118 dirty pages
+Found 111 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #12 freed 0 bytes, heap 8476 KiB (+ 6592 KiB internal)
+World-stopped marking took 1 ms 730336 ns (1 ms in average)
+Complete collection since start took 21954.382000 µs
+In-use heap: 94% (8000 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1065 ns + 0 ms 39351 ns
+***>Full mark for collection #13 after 2850816 allocd bytes
+0 bytes in heap blacklisted for interior pointers
+Disposing of reclaim lists took 0 ms 658 ns
+
+--> Marking for collection #13 after 2850816 allocated bytes
+Checked 2697 clean and 129 dirty pages
+Found 119 dirty bit errors (0 were faulted)
+mark_state : 5
+GC #13 freed 0 bytes, heap 11304 KiB (+ 6656 KiB internal)
+World-stopped marking took 6 ms 224548 ns (1 ms in average)
+Complete collection since start took 28178.930000 µs
+In-use heap: 95% (10784 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1889 ns + 0 ms 73429 ns
+
+--> Marking for collection #14 after 3801088 allocated bytes
+Checked 3625 clean and 144 dirty pages
+Found 130 dirty bit errors (0 were faulted)
+mark_state : 0
+Marked from 0 dirty pages
+GC #14 freed 0 bytes, heap 15076 KiB (+ 6784 KiB internal)
+World-stopped marking took 3 ms 347943 ns (1 ms in average)
+Complete collection since start took 31526.873000 µs
+In-use heap: 96% (14496 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1486 ns + 0 ms 60860 ns
+ Creating a long-lived binary tree of depth 16
+ Creating a long-lived array of 500000 doubles
+Creating 33824 trees of depth 4
+	Top down construction took 29 msec
+	Bottom up construction took 29 msec
+Creating 8256 trees of depth 6
+	Top down construction took 29 msec
+	Bottom up construction took 28 msec
+Creating 2052 trees of depth 8
+	Top down construction took 30 msec
+	Bottom up construction took 28 msec
+Creating 512 trees of depth 10
+	Top down construction took 29 msec
+	Bottom up construction took 32 msec
+Creating 128 trees of depth 12
+	Top down construction took 30 msec
+	Bottom up construction took 31 msec
+Creating 32 trees of depth 14
+	Top down construction took 32 msec
+	Bottom up construction took 33 msec
+Creating 8 trees of depth 16
+	Top down construction took 36 msec
+	Bottom up construction took 39 msec
+Completed in 489 msec

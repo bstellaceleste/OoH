@@ -1,0 +1,85 @@
+Grew heap sections array to 32 elements
+Initiating full world-stop collection! -------------------
+0 bytes in heap blacklisted for interior pointers
+
+--> Marking for collection #1 after 0 allocated bytes
+Using soft-dirty bit feature
+Checked 0 clean and 16 dirty pages
+mark_state : 5
+GC #1 freed 0 bytes, heap 64 KiB (+ 192 KiB internal)
+World-stopped marking took 0 ms 128913 ns (0 ms in average)
+Complete collection since start took 128.913000 µs
+In-use heap: 0% (0 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 757 ns + 0 ms 3862 ns
+Complete collection took 0 ms 144947 ns
+Dimension = 1000
+Number of clusters = 1000
+Number of points = 1000
+Size of each dimension = 100
+
+--> Marking for collection #2 after 4001360 allocated bytes
+Using soft-dirty bit feature
+Checked 1 clean and 997 dirty pages
+mark_state : 0
+Marked from 0 dirty pages
+GC #2 freed 0 bytes, heap 3992 KiB (+ 192 KiB internal)
+World-stopped marking took 0 ms 859783 ns (0 ms in average)
+Complete collection since start took 988.696000 µs
+In-use heap: 97% (3908 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 892 ns + 0 ms 6678 ns
+***>Full mark for collection #3 after 4016032 allocd bytes
+0 bytes in heap blacklisted for interior pointers
+Disposing of reclaim lists took 0 ms 1095 ns
+
+--> Marking for collection #3 after 4016032 allocated bytes
+Using soft-dirty bit feature
+Checked 0 clean and 2307 dirty pages
+mark_state : 5
+GC #3 freed 0 bytes, heap 9228 KiB (+ 256 KiB internal)
+World-stopped marking took 2 ms 164024 ns (0 ms in average)
+Complete collection since start took 3152.720000 µs
+In-use heap: 84% (7829 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1196 ns + 0 ms 9534 ns
+KMeans: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 63
+Status: All 1 threads have been created
+map phase: 275930
+Status: All 1 threads have been created
+
+--> Marking for collection #4 after 2794992 allocated bytes
+Using soft-dirty bit feature
+Checked 0 clean and 3077 dirty pages
+mark_state : 0
+Marked from 4 dirty pages
+GC #4 freed -2688 bytes, heap 12308 KiB (+ 320 KiB internal)
+World-stopped marking took 2 ms 983229 ns (1 ms in average)
+Complete collection since start took 6135.949000 µs
+In-use heap: 75% (9296 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1246 ns + 0 ms 30807 ns
+reduce phase: 6283
+Status: All 1 threads have been created
+merge phase: 289
+library finalize: 7
+[Phoenix] num_map_tasks = 63
+Status: All 1 threads have been created
+map phase: 295080
+Status: All 1 threads have been created
+
+--> Marking for collection #5 after 3297888 allocated bytes
+Using soft-dirty bit feature
+Checked 2130 clean and 1973 dirty pages
+mark_state : 0
+Marked from 202 dirty pages
+GC #5 freed 1289616 bytes, heap 16412 KiB (+ 384 KiB internal)
+World-stopped marking took 2 ms 719649 ns (1 ms in average)
+Complete collection since start took 8855.598000 µs
+In-use heap: 67% (11002 KiB pointers + 0 KiB other)
+Finalize and initiate sweep took 0 ms 1198 ns + 0 ms 30728 ns
+reduce phase: 5633
+Status: All 1 threads have been created
+merge phase: 281
+library finalize: 7
+
+KMeans: MapReduce Completed
+finalize: 101 µs
+kmeans took: 608071 µs

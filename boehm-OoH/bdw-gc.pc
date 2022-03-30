@@ -1,0 +1,10 @@
+prefix=/home/stella/boehm/Use_Case_Apps/phoenix-2.0
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: Boehm-Demers-Weiser Conservative Garbage Collector
+Description: A garbage collector for C and C++
+Version: 8.3.0
+Libs: -L${libdir}  -lgc  -ldl
+Cflags: -I${includedir}

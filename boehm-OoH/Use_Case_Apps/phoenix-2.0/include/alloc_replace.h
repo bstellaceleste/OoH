@@ -1,0 +1,1 @@
+#define calloc(m,n) GC_MALLOC((m)*(n))
