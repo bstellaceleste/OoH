@@ -9,3 +9,15 @@ This repo provides the tools aand directives to evaluate SPML and EPML implement
 
 ## Shadow PML (SPML)
 
+To facilitate the tests, the following material is provided:
+- [Xen 4.10 patched](xen-OoH)
+- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take a while (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
+- The use case [Boehm GC](bohem-OoH) patched
+- A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=bochs.raw) with the Xen tools installed for PML activation from the guest.
+
+### Environment Setup
+
+#### Prerequisites
+1. Verify that the processor supports PML: 
+    * `sudo modprobe msr`
+    * `sudo rdmsr 48BH`
