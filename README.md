@@ -5,7 +5,7 @@ Extended PML (EPML) that we integrated into CRIU and Boehm GC. Evaluation result
 
 OoH is implemented using Xen 4.10.0 hypervisor, Linux 4.15.0 guest OS, and BOCHS 2.6.11 Intel x86 emulator (only for EPML, which extends the hardware), Boehm Garbage Collector and CRIU.
 
-This repo provides the tools aand directives to test SPML and EPML implementations.
+This repo provides the tools and directives to test SPML and EPML implementations.
 
 # Overview
 
@@ -123,4 +123,29 @@ sudo make
 **3. Execute applications**
 
 All applications are in the `tests` dir, and datasets required are available in each bench's folder when applicable.
-To execute `word_count` for example, move to `tests/word_count`, log in as superuser and type: `./word_count dataset/word_50MB.txt`
+
+   * histogram
+     ```
+     cd tests/histogram
+     ./histogram dataset/large.bmp
+     ```
+   * kmeans
+     ```
+     cd tests/kmeans
+     ./kmeans -d 5000 -c 5000 -p 5000 -s 100
+     ```
+   * pca
+     ```
+     cd tests/pac
+     ./pca -r 10000 -c 5000 -s 200
+     ```
+   * string_match
+     ```
+     cd tests/string_match
+     ./string_match dataset/key_file_200MB.txt
+     ```
+   * word_count
+     ```
+     cd tests/word_count
+     ./word_count dataset/word_100MB.txt
+     ```
