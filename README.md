@@ -14,10 +14,10 @@ We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML
 
 ## Shadow PML (SPML)
 
-To facilitate the tests, the following material is provided:
+To facilitate the tests, the following material is provided (and should be downloaded):
 - [Xen 4.10 patched](xen-OoH)
 - [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
-- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH).
+- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH) and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
 - A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with the Xen tools installed for PML activation from the guest.
 
 ### Environment Setup
@@ -122,8 +122,16 @@ sudo make
 
 **3. Execute applications**
 
-All applications are in the `tests` dir, and datasets required are available in each bench's folder when applicable.
+All applications are in the `tests` dir, and datasets required may have been previously downloaded in the _prerequisites_ section.
 > From boehm-OoH/Use_Case_Apps
+
+First, uncompress it dataset folder in the corresponding bench dir:
+```
+unzip -d . datasets
+unzip -d test/histogram/dataset datasets/dataset_hist
+unzip -d test/string_match/dataset datasets/dataset_string
+unzip -d test/word_count/dataset datasets/dataset_word
+```
 
    * histogram
      ```
