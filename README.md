@@ -69,12 +69,14 @@ sudo ifconfig xenbr0 10.0.0.1
 ```
 To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo routing.sh ethX`.
 
+### Testing
+
 #### Accessing the VM
 When the VM has completely booted (its state is `r` -for _ready_- in the list), you can access it via ssh: `ssh stella@10.0.0.2`. The password is `toto`.
 
 The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
 
-#### Boehm GC Compilation
+#### Compiling Boehm GC
 Boehm is compiled in the VM (from `$HOME`) as follows:
 ```
 cd boehm
@@ -82,7 +84,8 @@ sudo ./configure --disable-threads --prefix=/home/stella/boehm/Use_Case_Apps/pho
 sudo make
 sudo make install
 ```
-Once installed, export GC-specific environment variables to enable incremental collection and statistics print:
+Libraries are installed to the `lib` dir.
+Once installed, export GC-specific environment variables to enable incremental collection and statistics prints:
 ```
 GC_ENABLE_INCREMENTAL='GC_ENABLE_INCREMENTAL'
 GC_PRINT_VERBOSE_STATS='GC_PRINT_VERBOSE_STATS'
@@ -96,13 +99,28 @@ export GC_USE_GETWRITEWATCH
 #### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
-The first thing is to launch the OoH kernel module:
+**1. Load OoH kernel module**
 
-`su (password: `toto`) `
-> you should in root mode do not use sudo
+The first thing is to load the OoH kernel module:
+
+`su (password: toto)`
+> You should be in root mode -do not use sudo-
 ```
 cd /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0
 make
 insmod uio_vtf
 ```
 If the module has been successfully loaded, you must find in `/dev` a device named **`uio0`**.
+
+**2. Compile Phoenix applications**
+
+From the `boehm` directory:
+```
+cd Use_Case_Apps/phoenix-2.0/
+sudo make
+```
+
+**3. Execute applications**
+
+All applications are in the `tests` dir, and datasets required are available in each bench's folder when applicable.
+To execute `word_count` for example, move to `tests/word_count`, log in as superuser and type: `./word_count dataset/word_50MB.txt`
