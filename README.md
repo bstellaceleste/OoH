@@ -96,4 +96,13 @@ export GC_USE_GETWRITEWATCH
 #### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
+The first thing is to launch the OoH kernel module:
 
+`su (password: `toto`) `
+> you should in root mode do not use sudo
+```
+cd /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0
+make
+insmod uio_vtf
+```
+If the module has been successfully loaded, you must find in `/dev` a device named **`uio0`**.
