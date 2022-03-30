@@ -1,0 +1,54 @@
+********DOM0*************
+- démarrer xen
+- lancer la vm
+- si le mécanisme du pml est nécessaire l'activer directement avant d'ouvrir la vm via ssh : xl enable-log-dirty vm_id
+
+####HPL####
+- créer la machine avec le fichier conf.cfg
+- attribuer les cpu aux vms avec xl vcpu-pin
+- y accéder par ssh (ip 10.0.0.2)
+- se déplacer dans hpl/bin/x86 (ici x86 est l'architecture pour laquelle on a créé l'exécutable xhpl)
+- lancer l'expe : mpiexecc.openmpi xhpl
+
+
+###BIGBENCH-WRITE-READ#####
+- créer la vm avec le fichier conf_hadoop.cfg
+- attribuer les cpu aux vms avec xl vcpu-pin
+- se deplacer $HBASE_HOME
+- supprimer puis recréer les dossiers rootDir et zookeeper
+- lancer hbase : bin/start-hbase.sh
+- lancer zookeeper : bin/zookeepers.sh --config conf/
+- relacer hbase : bin/start-hbase.sh
+- vérifier que tout est bien lancé : jps (cette commande doit afficher (HQuorumPeer, HMaster, HRegionServer, jps)
+- ouvrir le shell de hbase : hbase shell (si tout est bien lancé dans le shell la commande "list" devrait afficher la liste des tables présentes dans la bd, sinon la commande ne s'exécutera pas)
+- dans le shell de hbase créer la bd : create 'usertable','column_family' et sortir avec exit (dans notre cas le column_family c'est 'data')
+- se déplacer dans le dossier $HOME/BigDataBench_V3.1_Hadoop_Hive/BasicDatastoreOperations/ycsb-0.1.4
+- si le pml est activé avant de lancer la commande faire dans le dom0: xl dmesg -c
+
+*********************write*****************************************
+- lancer le write avec : bin/ycsb load hbase -P workloads/workloadc -p threads=2 -p columnfamily=column_family -p recordcount=15000000 -p hosts=127.0.0.1 -s > load.dat
+
+*******************read*********************
+- lancer le read avec : bin/ycsb run hbase -P workloads/workload_read -p threads=2 -p columnfamily=column_family2 -p recordcount=15000000 -p hosts=127.0.0.1 -s > load.dat (le workload c'est le même que le read dans lequel on a modifié la valeur du recordcount qui y est fixée à 1000
+
+
+#####################BIGBENCH-SORT#################################
+- créer la vm avec le fichier conf_hadoop.cfg
+
+avec hadoop il faut supprimer le hdfs, le recréer et faire un namenode format
+
+- attribuer les cpu aux vms avec xl vcpu-pin
+- se deplacer dans $HADOOP_HOME pour lancer hadoop
+- quiter le safemode avec la commande: hadoop dfsadmin -safemode leave
+- se déplacer dans le répertoire $HOME/BigDataBench_V3.1_Hadoop_Hive/MicroBenchmarks
+- générer les données avec le script genData_Sort.sh : il est à noter que ce script ne génère que 1GB de données peu importe la valeur entrée
+- après génération pour augmenter la taille il faut copier et coller certains des fichiers précédemment générés (10 fichiers sont créés)
+- supprimer le dossier de sortie s'il exite déjà : ${HADOOP_HOME}/bin/hadoop fs -rmr /data-MicroBenchmarks/out/sort
+- lancer le sort avec la commande time ${HADOOP_HOME}/bin/hadoop jar  ${HADOOP_HOME}/hadoop-examples-*.jar  sort /data-MicroBenchmarks/sort-data /data-MicroBenchmarks/out/sort
+
+
+#####################TIPS#################################
+pour lancer une commande dans la vm depuis le dom0 (i.e. sans avoir besoin d'y accéder par ssh) : ssh addr_vm "cde"
+exple: ssh 10.0.0.2 "/usr/local/bin/start-all.sh" //pr démarrer haddoop
+
+

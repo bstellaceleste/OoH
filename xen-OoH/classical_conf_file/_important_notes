@@ -1,0 +1,212 @@
+sudo apt-get install openssh-client openssh-server
+
+xen 4.7 -- /etc/xen/xend-config.sxp
+(xend-relocation-server yes)
+(xend-relocation-address '')
+(xend-relocation-hosts-allow '')
+------------------------------------------------------------------------------------------------------------------
+create a .raw file (vm's disk)
+dd if=/dev/zero of=vm_name.raw count=nb_of_block_size bs=size_of_a_block
+------------------------------------------------------------------------------------------------------------------
+/etc/ssh/sshd_config : PermitRootLogin yes
+
+cmd migration : sudo xl migrate --debug --live domid localhost (ou addr si on n'effectue pas la migration en local)
+
+//pour autoriser le sudo à accéder au localhost sans mdp
+cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
+//pour autoriser le default user à accéder au root@localhost sans mdp
+cat /home/user/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
+
+when you have generated a key "id_rsa" you copy it for other authorizations: ssh-copy-id -i ~/.ssh/id_rsa host_address
+------------------------------------------------------------------------------------------------------------------
+
+/usr/local/lib/xen/bin/libxl-save-helper --enable-log-dirty
+------------------------------------------------------------------------------------------------------------------
+
+//
+#changement de la taille de buffer du dmesg pour xen
+xen_rm_opts= "conring_size=2048k loglvl=all guest_loglvl=all" dans le fichier /boot/grub/grub.cfg
+
+
+//
+chronologie des push gitup : git log
+patch git : git diff log_x..log_x+1 > out
+
+//pour le routage (faire accéder la vm à internet)
+**dans l'hôte
+- brctl addif xenbr0 eth0
+- iptables -A FORWARD -o wlp2s0 -i xenbr0 -s 10.0.0.0/24 -m conntrack --ctstate NEW -j ACCEPT
+- iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+- iptables -t nat -A POSTROUTING -o wlp2s0 -j MASQUERADE
+- iptables -t nat -A POSTROUTING -j MASQUERADE (routage)
+- echo 1 > /proc/sys/net/ipv4/ip_forward
+**dans la vm
+- /etc/init.d/procps restart
+- echo "nameserver 8.8.8.8" > /etc/resolv.conf
+- route add default gw addr_xenbr0_dans_lhote
+
+//
+serveur de fichier nfs (pour partager des fichier entre ++ machines)
+**installation sur le serveur
+- apt install nfs-kernel-server
+- /chemin/du/fichier/ou/dossier/a/partager *(rw,sync,no_root_squash)//ligne à ajouter dans le fichier /etc/exports : * c pr dire partager avc ts les user et entre parenthèses on a les droits accordés,  <dossier partagé> <hôte>(<options>) <hôte2>(<options>)...
+- si vs modifiez le fichier export il faut relancer le serveur avec : sudo service nfs-kernel-server reload
+**installation chez le client
+- apt install nfs-common
+- mount -t nfs addr_du_serveur:/chemin/du_fichier_ou_dossier/partagé_chez_le_serveur /chemin/du/fichier_ou_dossier/devant/contenir/le_fichier_ou_dossier_partagé 
+
+
+//
+connaitre la répartition des cpu par vm : xl vcpu-list
+
+assigner des pcpu spécifiques aux vcpu des vm : xl vcpu-pin id_vm vcpu pcpu
+
+lancer un programme en lui assignant un cpu spécifique : taskset -c num_cpu prog
+
+assigner un cpu à un prog en cours d'exécution : taskset -p mask pid
+
+
+
+
+//tlb miss benchmark
+sudo apt install mercurial
+clone https://bitbucket.org/dinhngtu/sgxbench
+cd sgxbench/
+rm aclocal.m4 c* E* install-sh launch LICENSE.configure m* M* ocalls.c README s* util.*
+rm aclocal.m4 c* E* install-sh launch LICENSE.configure m* M* ocalls.c README s* util.* -r
+cd flood/
+make
+cd ..
+rm -r .hg
+cd flood/
+cd ../recording-scripts/
+cp ../flood/flood .
+chmod +x * 
+sudo apt install linux-tools-generic-hwe-16.04
+./record.sh ./flood 
+sudo perf list
+cd ../flood/
+make 
+./flood 
+
+*********************************************************************************
+-----------------compile linux for the 1st time----------------------------------
+sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev bc
+sudo cp -v /boot/config-$(uname -r) .config
+yes '' | make oldconfig
+sudo make menuconfig
+sudo make clean
+sudo make -j `getconf _NPROCESSORS_ONLN` deb-pkg LOCALVERSION=-custom
+cd ..
+sudo dpkg -i linux-firmware-image-version-custom_version-custom-1_amd64.deb
+sudo dpkg -i linux-libc-dev_4.11.1-custom-1_amd64.deb
+sudo dpkg -i linux-headers-4.11.1-custom_4.11.1-custom-1_amd64.deb
+sudo dpkg -i linux-image-4.11.1-custom-dbg_4.11.1-custom-1_amd64.deb
+sudo dpkg -i linux-image-4.11.1-custom_4.11.1-custom-1_amd64.deb
+reboot
+
+
+*********************************************************************************
+**********************pbs while installing xen 4.10 on ubuntu 18*****************
+*********************************************************************************
+- in tools: pbs with memfd and asprintf
+----> tools/qemu-xen/util/memfd.c: 
+		-#ifdef CONFIG_MEMFD
+		-#include <sys/memfd.h>
+		-#elif defined CONFIG_LINUX
+		+#if defined CONFIG_LINUX && !defined CONFIG_MEMFD 
+
+----> tools/qemu-xen/configure: 
+		-#include <sys/memfd.h>
+		+#include <sys/mman.h>
+
+----> tools/tests/xenstore/xs-test.c:
+		* in the function "int main", declare a variable return_asprintf = 0 (line 446)
+		* everywhere asprintf is called (lines 485 & 489), assign it to that variable like this: return_asprintf = asprintf(&path, "%s/%u", TEST_PATH, getpid());
+
+*************************************************************************************
+************change grub to use (grub2-when you installed 2OS on 2partitions**********
+*************************************************************************************
+sudo blkid //to see where each partition is mounted (in my case /dev/nvme0n1p1)
+sudo mkdir tmp && sudo mount /dev/nvme0n1p1 tmp/
+cd tmp
+vim EFI/ubuntu/grub.cfg //in this file change the UUID of the OS you want to use the grub
+
+
+
+*************************************************************************************
+************to have xl console accessing to the guest********************************
+*************************************************************************************
+add this to /boot/grub/meu.list:
+
+--->before the list of entries
+serial --unit=0 --speed=9600
+terminal --timeout=5 serial console
+
+---> at the end of the corresponding entry (the one you boot on)
+console=ttyS0
+
+
+*************************************************************************************
+**********Linux Operating Systems - Mounting a RAW or QCOW2 Qemu Image File**********
+*************************************************************************************
+
+Information
+NOTE: This information will work on any Linux distro with the latest KVM/Qemu software.
+
+Virtual Machine (VM) image disks are generally only accessible via the Virtual Machine they are attached to. However, there may come a time when one would need to mount that image file or directory to make changes to the files within.
+
+OR
+
+Perhaps one has set an image file as a backup disk for a Virtual Machine server and needs to gain access to the files.
+
+Below is an explanation of the steps on how to access the contents of these image files.
+Details
+
+Mounting a raw image file with one partition is pretty straight forward with the following tools:
+
+losetup /dev/loop0 VirtualMachineImage.raw  
+kpartx -a /dev/loop0  
+mount /dev/mapper/loop0p1 /mnt
+
+If there are multiple partitions, use fdisk to get the offset to the partitions and proceed as follows:
+
+
+mount VirtualMachineImage.raw /mnt -o loop,offset=32256
+
+Use fdisk to get the start sector and multiply that by the block size. Then set the offset of each partition.
+
+For example, from inside the VM connected to the storage file:
+
+# fdisk -l /dev/vda
+
+Disk /dev/vda: 52.4 GB, 52428800000 bytes
+255 heads, 63 sectors/track, 6374 cylinders
+Units = cylinders of 16065 * 512 = 8225280 bytes
+
+   Device Boot      Start         End      Blocks   Id  System
+/dev/vda1   *           1          13      104391   83  Linux
+/dev/vda2              14        6374    51094732+  8e  Linux LVM
+
+In this case, the block size is 512 and the start of the /boot partition is 1. So 512*1 would be 512. This would be the offset for the first partition. For the second partition offset, multiply 512 by 14 (the start of the second partition).
+
+To mount a qcow2 file, one would proceed as follows:
+
+modprobe nbd max_part=63
+qemu-nbd -c /dev/nbd0 VirtualMachineImage.qcow2
+mount /dev/nbd0p1 /mnt
+
+If the image has LVM, one can enable LVM using:
+
+vgscan
+vgchange -ay
+mount /dev/vgroup/lv_image_disk_name /mnt
+
+To undo all the mounts and changes made, use the following commands:
+
+umount /mnt
+vgchange -an vgroup
+killall qemu-nbd
+kpartx -d /dev/loop0
+losetup -d /dev/loop0
+

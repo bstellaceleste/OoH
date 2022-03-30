@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/xenstat/libxenstat/../../..
+includedir=/home/stella/PML-Xen10/tools/xenstat/libxenstat/../../../tools/xenstat/libxenstat/src
+libdir=/home/stella/PML-Xen10/tools/xenstat/libxenstat
+
+Name: Xenstat
+Description: The Xenstat library for Xen hypervisor
+Version: 0.0
+Cflags: -I${includedir}
+Libs: -Wl,-rpath-link=${libdir} -lxenstat
+Requires.private: xencontrol,xenstore

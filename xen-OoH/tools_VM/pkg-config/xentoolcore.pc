@@ -1,0 +1,9 @@
+prefix=/home/stella/PML-Xen10/tools/libs/toolcore/../../..
+includedir=/home/stella/PML-Xen10/tools/libs/toolcore/../../../tools/libs/toolcore/include
+libdir=/home/stella/PML-Xen10/tools/libs/toolcore
+
+Name: Xentoolcore
+Description: Central support for Xen Hypervisor userland libraries
+Version: 1.0
+Cflags: -I${includedir}
+Libs: -Wl,-rpath-link=${libdir} -lxentoolcore

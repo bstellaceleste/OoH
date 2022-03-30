@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/libs/gnttab/../../..
+includedir=/home/stella/PML-Xen10/tools/libs/gnttab/../../../tools/libs/gnttab/include
+libdir=/home/stella/PML-Xen10/tools/libs/gnttab
+
+Name: Xengnttab
+Description: The Xengnttab library for Xen hypervisor
+Version: 1.1
+Cflags: -I${includedir} -I/home/stella/PML-Xen10/tools/libs/gnttab/../../../tools/include
+Libs: -Wl,-rpath-link=${libdir} -lxengnttab
+Requires.private: xentoollog,xentoolcore

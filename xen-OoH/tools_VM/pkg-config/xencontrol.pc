@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/libxc/../..
+includedir=/home/stella/PML-Xen10/tools/libxc/../../tools/libxc/include
+libdir=/home/stella/PML-Xen10/tools/libxc
+
+Name: Xencontrol
+Description: The Xencontrol library for Xen hypervisor
+Version: 4.10.0
+Cflags: -I${includedir} -I/home/stella/PML-Xen10/tools/libxc/../../tools/include
+Libs: -Wl,-rpath-link=${libdir} -lxenctrl
+Requires.private: xenevtchn,xengnttab,xencall,xenforeignmemory,xendevicemodel,xentoollog

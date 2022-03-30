@@ -1,0 +1,9 @@
+prefix=/home/stella/PML-Xen10/tools/libs/toollog/../../..
+includedir=/home/stella/PML-Xen10/tools/libs/toollog/../../../tools/libs/toollog/include
+libdir=/home/stella/PML-Xen10/tools/libs/toollog
+
+Name: Xentoollog
+Description: The Xentoollog library for Xen hypervisor
+Version: 1.0
+Cflags: -I${includedir}
+Libs: -Wl,-rpath-link=${libdir} -lxentoollog

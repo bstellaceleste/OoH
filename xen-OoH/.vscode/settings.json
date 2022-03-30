@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "stat.h": "c",
+        "multicall.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
+}

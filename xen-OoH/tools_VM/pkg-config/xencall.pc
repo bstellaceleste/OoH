@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/libs/call/../../..
+includedir=/home/stella/PML-Xen10/tools/libs/call/../../../tools/libs/call/include
+libdir=/home/stella/PML-Xen10/tools/libs/call
+
+Name: Xencall
+Description: The Xencall library for Xen hypervisor
+Version: 1.0
+Cflags: -I${includedir} -I/home/stella/PML-Xen10/tools/libs/call/../../../tools/include
+Libs: -Wl,-rpath-link=${libdir} -lxencall
+Requires.private: xentoollog,xentoolcore

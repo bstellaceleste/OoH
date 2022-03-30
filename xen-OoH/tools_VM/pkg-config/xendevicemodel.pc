@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/libs/devicemodel/../../..
+includedir=/home/stella/PML-Xen10/tools/libs/devicemodel/../../../tools/libs/devicemodel/include
+libdir=/home/stella/PML-Xen10/tools/libs/devicemodel
+
+Name: Xendevicemodel
+Description: The Xendevicemodel library for Xen hypervisor
+Version: 1.1
+Cflags: -I${includedir} -I/home/stella/PML-Xen10/tools/libs/devicemodel/../../../tools/include
+Libs: -Wl,-rpath-link=${libdir} -lxendevicemodel
+Requires.private: xentoolcore,xentoollog,xencall

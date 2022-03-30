@@ -1,0 +1,1 @@
+/home/stella/PML-Xen10/tools/qemu-xen-traditional/tests/cris/.gdbinit

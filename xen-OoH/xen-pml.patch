@@ -1,0 +1,4794 @@
+Seulement dans xen-4.10.0/: .bash_history
+Seulement dans xen-4.10.0/: .cache
+Seulement dans xen-4.10.0/: classical_conf_file
+Seulement dans xen-4.10.0-origin/: extras
+Seulement dans xen-4.10.0/: .git
+Seulement dans xen-4.10.0/: pml-xen-4.10.0.patch
+Seulement dans xen-4.10.0/: README.md
+Seulement dans xen-4.10.0/: .sudo_as_admin_successful
+Seulement dans xen-4.10.0-origin/tools/hotplug/FreeBSD: rc.d
+Seulement dans xen-4.10.0-origin/tools/hotplug/Linux: init.d
+Seulement dans xen-4.10.0-origin/tools/hotplug/Linux: vif-post.d
+Seulement dans xen-4.10.0-origin/tools/hotplug/NetBSD: rc.d
+diff -ru xen-4.10.0-origin/tools/libxc/include/xenctrl.h xen-4.10.0/tools/libxc/include/xenctrl.h
+--- xen-4.10.0-origin/tools/libxc/include/xenctrl.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxc/include/xenctrl.h	2019-09-18 19:17:34.177908000 +0100
+@@ -459,6 +459,8 @@
+ } xc_dominfo_t;
+ 
+ typedef xen_domctl_getdomaininfo_t xc_domaininfo_t;
++typedef xen_domctl_vtf_pids_t xc_vtf_pidinfo_t;
++typedef xen_sysctl_vtf_getcpuinfo_t xc_vtf_cpuinfo_t; 
+ 
+ typedef union 
+ {
+@@ -2592,7 +2594,7 @@
+  * The operations are asynchronous and the hypervisor may take a while
+  * to complete them. The `timeout` offers an option to expire the
+  * operation if it could not be completed within the specified time
+- * (in ns). Value of 0 means let hypervisor decide the best timeout.
++ * (in ns). Value of 0 means let hypervisor decide the best timeout. 
+  */
+ int xc_livepatch_apply(xc_interface *xch, char *name, uint32_t timeout);
+ int xc_livepatch_revert(xc_interface *xch, char *name, uint32_t timeout);
+@@ -2607,6 +2609,13 @@
+ int xc_domain_cacheflush(xc_interface *xch, uint32_t domid,
+                          xen_pfn_t start_pfn, xen_pfn_t nr_pfns);
+ 
++
++int xc_vtf(xc_interface *xch, int arg, xc_vtf_cpuinfo_t *xcinfo, char *hw, uint32_t pid_list[25]);
++int xc_domain_enable_logdirty(xc_interface *xch, uint32_t dom, int is_vtf, uint32_t pid_list[25]);
++int xc_domain_disable_logdirty(xc_interface *xch, uint32_t dom, int is_vtf, uint32_t pid_list[25]);
++int xc_collect_dirty_logs(xc_interface *xch, uint32_t dom);
++int xc_clean_dirty_bitmap(xc_interface *xch, uint32_t dom);
++
+ /* Compat shims */
+ #include "xenctrl_compat.h"
+ 
+diff -ru xen-4.10.0-origin/tools/libxc/xc_domain.c xen-4.10.0/tools/libxc/xc_domain.c
+--- xen-4.10.0-origin/tools/libxc/xc_domain.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxc/xc_domain.c	2019-09-22 11:50:19.155515000 +0100
+@@ -23,6 +23,8 @@
+ #include "xc_core.h"
+ #include "xg_private.h"
+ #include "xg_save_restore.h"
++//#include "emul.h"
++//#include "hpet.h"
+ #include <xen/memory.h>
+ #include <xen/hvm/hvm_op.h>
+ 
+@@ -686,6 +688,7 @@
+ 
+     memset(&domctl, 0, sizeof(domctl));
+ 
++    //domctl.u.vtf.cmd.action = 0;
+     domctl.cmd = XEN_DOMCTL_shadow_op;
+     domctl.domain = domid;
+     domctl.u.shadow_op.op     = sop;
+@@ -2433,8 +2436,149 @@
+     DECLARE_DOMCTL;
+     domctl.cmd = XEN_DOMCTL_soft_reset;
+     domctl.domain = domid;
+-    return do_domctl(xch, &domctl);
++    return do_domctl(xch, &domctl); 
++}
++
++int xc_vtf(xc_interface *xch, int arg, xc_vtf_cpuinfo_t *xcinfo, char *hw, uint32_t pid_list[25])
++{
++    int ret = 0; 
++    uint32_t dom = -1;
++    DECLARE_SYSCTL;
++    DECLARE_HYPERCALL_BOUNCE(xcinfo, sizeof(*xcinfo), XC_HYPERCALL_BUFFER_BOUNCE_OUT);
++       
++    switch (arg)
++    {
++    case 1:
++        if ( xc_hypercall_bounce_pre(xch, xcinfo) )
++            return -1;
++         
++        sysctl.cmd = XEN_SYSCTL_vtf;
++        sysctl.u.vtf.check = 1;
++        sysctl.u.vtf.cmd.action = XEN_SYSCTL_vtf_action_list;
++        set_xen_guest_handle(sysctl.u.vtf.buffer, xcinfo);
++        ret = xc_sysctl(xch, &sysctl); 
++        xc_hypercall_bounce_post(xch, xcinfo);
++        break;
++
++    case 2:
++        if(!strcmp(hw, "PML"))
++            ret = xc_domain_enable_logdirty(xch, dom, 1, pid_list);
++        else if(!strcmp(hw, "EPT")){
++
++        }
++
++        break;
++
++    case 3:
++        if(!strcmp(hw, "PML"))
++            ret = xc_domain_disable_logdirty(xch, dom, 1, pid_list);
++        else if(!strcmp(hw, "EPT")){
++
++        }
++        
++        break;
++    }
++
++    return ret;
+ }
++
++int xc_domain_enable_logdirty(xc_interface *xch, uint32_t dom, int is_vtf, uint32_t pid_list[25])
++{
++    int rc; 
++    DECLARE_DOMCTL;
++    memset(&domctl, 0, sizeof(domctl));
++
++    if(is_vtf) {
++        memcpy(domctl.u.vtf.pids, pid_list, 25*sizeof(int));    
++        domctl.cmd = XEN_DOMCTL_vtf;
++        domctl.u.vtf.hw = XEN_DOMCTL_vtf_hw_PML;
++    }
++    else 
++    {
++        domctl.cmd = XEN_DOMCTL_shadow_op;
++        domctl.domain = (domid_t)dom;
++    }
++
++    domctl.u.shadow_op.op     = XEN_DOMCTL_SHADOW_OP_ENABLE_LOGDIRTY;
++
++    rc = do_domctl(xch, &domctl);
++
++    return rc;
++}
++
++int xc_domain_disable_logdirty(xc_interface *xch, uint32_t dom, int is_vtf, uint32_t pid_list[25])
++{
++    int rc;
++    DECLARE_DOMCTL;
++    memset(&domctl, 0, sizeof(domctl));
++
++    if(is_vtf) {
++        memcpy(domctl.u.vtf.pids, pid_list, 25*sizeof(int));  
++        domctl.cmd = XEN_DOMCTL_vtf;
++        domctl.u.vtf.hw = XEN_DOMCTL_vtf_hw_PML;
++    }
++    else 
++    {
++        domctl.cmd = XEN_DOMCTL_shadow_op;
++        domctl.domain = (domid_t)dom;
++    }
++
++    domctl.u.shadow_op.op     = XEN_DOMCTL_SHADOW_OP_OFF;
++
++    rc = do_domctl(xch, &domctl);
++
++    return rc;
++}
++
++int xc_collect_dirty_logs(xc_interface *xch, uint32_t dom)
++{
++    int rc;
++    unsigned long p2m_size=1045504;
++    xen_pfn_t nr_pfns;
++    unsigned long *db=malloc(sizeof(unsigned long) * p2m_size);
++
++    DECLARE_DOMCTL;
++    DECLARE_HYPERCALL_BOUNCE(db, p2m_size * sizeof(*db), XC_HYPERCALL_BUFFER_BOUNCE_OUT);
++    memset(&domctl, 0, sizeof(domctl));
++
++    if(xc_domain_nr_gpfns(xch, (domid_t)dom, &nr_pfns)<0)
++    {
++        PERROR("Unable to obtain p2m_size");
++        //goto out;
++    }
++
++    domctl.cmd = XEN_DOMCTL_shadow_op;
++    domctl.domain = (domid_t)dom;
++    domctl.u.shadow_op.op     = XEN_DOMCTL_SHADOW_OP_PEEK;
++    domctl.u.shadow_op.pages  = p2m_size;
++    set_xen_guest_handle(domctl.u.shadow_op.dirty_bitmap, db);
++
++    rc = do_domctl(xch, &domctl);
++    xc_hypercall_bounce_post(xch, db);
++    
++    //out:
++      //  return rc;
++    return rc;
++}
++
++int xc_clean_dirty_bitmap(xc_interface *xch, uint32_t dom)
++{
++    int rc;
++    unsigned long p2m_size=1045504;
++
++    DECLARE_DOMCTL;
++    memset(&domctl, 0, sizeof(domctl));
++
++    domctl.cmd = XEN_DOMCTL_shadow_op;
++    domctl.domain = (domid_t)dom;
++    domctl.u.shadow_op.op     = XEN_DOMCTL_SHADOW_OP_CLEAN;
++    domctl.u.shadow_op.pages  = p2m_size;
++
++    rc = do_domctl(xch, &domctl);
++
++    return rc;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/libxc/xc_misc.c xen-4.10.0/tools/libxc/xc_misc.c
+--- xen-4.10.0-origin/tools/libxc/xc_misc.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxc/xc_misc.c	2019-09-18 19:17:34.177908000 +0100
+@@ -214,6 +214,8 @@
+     int ret;
+     DECLARE_SYSCTL;
+ 
++    if(put_info->vtf_cmd)
++        sysctl.u.vtf.check = True;
+     sysctl.cmd = XEN_SYSCTL_physinfo;
+ 
+     memcpy(&sysctl.u.physinfo, put_info, sizeof(*put_info));
+diff -ru xen-4.10.0-origin/tools/libxl/libxl.c xen-4.10.0/tools/libxl/libxl.c
+--- xen-4.10.0-origin/tools/libxl/libxl.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl.c	2019-09-21 18:10:54.682283000 +0100
+@@ -357,7 +357,11 @@
+     int rc;
+     long l;
+     GC_INIT(ctx);
+-
++    
++    if(physinfo->domain_unpriv){
++       xcphysinfo.vtf_cmd = 1;
++       //printf("%d\n", (int)xcphysinfo.vtf_cmd);
++    }
+     rc = xc_physinfo(ctx->xch, &xcphysinfo);
+     if (rc != 0) {
+         LOGE(ERROR, "getting physinfo");
+@@ -775,6 +779,38 @@
+         (*dst)[i] = (*src)[i];
+ }
+ 
++int libxl_vtf(libxl_ctx *ctx, int arg, char *hw, uint32_t pid_list[25])
++{
++    int ret = 0;
++    xc_vtf_cpuinfo_t xcinfo;
++    GC_INIT(ctx); 
++     
++    switch (arg)
++    {
++    case 1:
++        ret = xc_vtf(ctx->xch, arg, &xcinfo, hw, pid_list);
++        printf("VMX: Supported advanced features:\n");
++        if(xcinfo.pml)
++            printf("   - PML: Page Modification Logging.\n");
++        if(xcinfo.ept)
++            printf("   - EPT: Extended Page Table.\n");
++        break;
++
++    case 2:
++    case 3:
++        //printf("pid_list = %d\n", pid_list[0]);
++        ret = xc_vtf(ctx->xch, arg, &xcinfo, hw, pid_list);
++        break;
++    
++    default:
++        break;
++    }
++
++    GC_FREE;
++
++    return ret;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/libxl/libxl_domain.c xen-4.10.0/tools/libxl/libxl_domain.c
+--- xen-4.10.0-origin/tools/libxl/libxl_domain.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl_domain.c	2019-09-21 12:51:59.544545000 +0100
+@@ -1733,6 +1733,29 @@
+     return rc;
+ }
+ 
++int libxl_domain_enable_logdirty(libxl_ctx *ctx, uint32_t domid)
++{
++    int ret;
++    GC_INIT(ctx);
++
++    ret = xc_domain_enable_logdirty(ctx->xch, domid, 0, NULL);
++    GC_FREE;
++
++    return ret;
++}
++
++int libxl_domain_disable_logdirty(libxl_ctx *ctx, uint32_t domid)
++{
++    int ret;
++    GC_INIT(ctx);
++
++    printf("libxl_disable_logdirty: libxl_domain.c\n");
++    ret = xc_domain_disable_logdirty(ctx->xch, domid, 0, NULL);
++    GC_FREE;
++
++    return ret;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/libxl/libxl.h xen-4.10.0/tools/libxl/libxl.h
+--- xen-4.10.0-origin/tools/libxl/libxl.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl.h	2019-09-18 19:17:34.181908000 +0100
+@@ -2320,6 +2320,13 @@
+ int libxl_qemu_monitor_command(libxl_ctx *ctx, uint32_t domid,
+                                const char *command_line, char **output);
+ 
++
++int libxl_vtf(libxl_ctx *ctx, int arg, char *hw, uint32_t pid_list[25]);
++int libxl_domain_disable_logdirty(libxl_ctx *ctx, uint32_t domid);
++int libxl_domain_enable_logdirty(libxl_ctx *ctx, uint32_t domid);
++int libxl_collect_dirty_logs(libxl_ctx *ctx, uint32_t domid);
++int libxl_clean_dirty_bitmap(libxl_ctx *ctx, uint32_t domid);
++
+ #include <libxl_event.h>
+ 
+ #endif /* LIBXL_H */
+diff -ru xen-4.10.0-origin/tools/libxl/libxl_internal.h xen-4.10.0/tools/libxl/libxl_internal.h
+--- xen-4.10.0-origin/tools/libxl/libxl_internal.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl_internal.h	2019-09-18 19:17:34.185909000 +0100
+@@ -4281,7 +4281,7 @@
+ void libxl__xcinfo2xlinfo(libxl_ctx *ctx,
+                           const xc_domaininfo_t *xcinfo,
+                           libxl_dominfo *xlinfo);
+-
++                          
+ /* Macros used to compare device identifier. Returns true if the two
+  * devices have same identifier. */
+ #define COMPARE_DEVID(a, b) ((a)->devid == (b)->devid)
+diff -ru xen-4.10.0-origin/tools/libxl/libxl_mem.c xen-4.10.0/tools/libxl/libxl_mem.c
+--- xen-4.10.0-origin/tools/libxl/libxl_mem.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl_mem.c	2019-09-18 19:17:34.185909000 +0100
+@@ -593,6 +593,30 @@
+     return rc;
+ }
+ 
++int libxl_collect_dirty_logs(libxl_ctx *ctx, uint32_t domid)
++{
++    int ret;
++    GC_INIT(ctx);
++
++    //printf("libxl_collect_dirty_logs: libxl_mem.c\n");
++    ret = xc_collect_dirty_logs(ctx->xch, domid);
++    GC_FREE;
++
++    return ret;
++}
++
++int libxl_clean_dirty_bitmap(libxl_ctx *ctx, uint32_t domid)
++{
++    int ret;
++    GC_INIT(ctx);
++
++    //printf("libxl_collect_dirty_logs: libxl_mem.c\n");
++    ret = xc_clean_dirty_bitmap(ctx->xch, domid);
++    GC_FREE;
++
++    return ret;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/libxl/libxl_types.idl xen-4.10.0/tools/libxl/libxl_types.idl
+--- xen-4.10.0-origin/tools/libxl/libxl_types.idl	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/libxl/libxl_types.idl	2019-09-18 19:17:34.185909000 +0100
+@@ -43,6 +43,11 @@
+ # Constants / Enumerations
+ #
+ 
++libxl_domain_unpriv = Enumeration("domain_unpriv", [
++    (0, "DOM0"),
++    (1, "DOMU"),
++])
++
+ libxl_error = Enumeration("error", [
+     (-1, "NONSPECIFIC"),
+     (-2, "VERSION"),
+@@ -901,6 +906,7 @@
+     ], dir=DIR_OUT)
+ 
+ libxl_physinfo = Struct("physinfo", [
++    ("domain_unpriv", libxl_domain_unpriv),
+     ("threads_per_core", uint32),
+     ("cores_per_socket", uint32),
+ 
+diff -ru xen-4.10.0-origin/tools/qemu-xen/configure xen-4.10.0/tools/qemu-xen/configure
+--- xen-4.10.0-origin/tools/qemu-xen/configure	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/configure	2019-09-18 19:17:34.297914000 +0100
+@@ -3855,7 +3855,7 @@
+ # check if memfd is supported
+ memfd=no
+ cat > $TMPC << EOF
+-#include <sys/memfd.h>
++#include <sys/mman.h>
+ 
+ int main(void)
+ {
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/docs/devel: build-system.txt
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/docs: qemu_logo.pdf
+Seulement dans xen-4.10.0-origin/tools/qemu-xen: dtc
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: bios-256k.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: bios.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: kvmvapic.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: linuxboot.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: linuxboot_dma.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: multiboot.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: ppc_rom.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: QEMU,cgthree.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: QEMU,tcx.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: sgabios.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: slof.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: spapr-rtas.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios-cirrus.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios-qxl.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios-stdvga.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios-virtio.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/pc-bios: vgabios-vmware.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen: pixman
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/bg.po xen-4.10.0/tools/qemu-xen/po/bg.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/bg.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/bg.po	2019-09-18 19:17:34.437920000 +0100
+@@ -7,7 +7,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 2.6.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2016-06-09 15:54+0300\n"
+ "Last-Translator: Alexander Shopov <ash@kambanaria.org>\n"
+ "Language-Team: Bulgarian <dict@ludost.net>\n"
+@@ -17,74 +17,74 @@
+ "Content-Transfer-Encoding: 8bit\n"
+ "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " — натиснете Ctrl+Alt+G, за да освободите фокуса"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [пауза]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Пауза"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "_Рестартиране"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Изключване"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr "_Спиране на програмата"
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr "На _цял екран"
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr "_Копиране"
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr "_Увеличаване"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr "_Намаляване"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr "По_местване"
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Напас_ване"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Прихващане при посо_чване"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "Прихващане на _фокуса"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "Подпро_зорци"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr "Към самостоятелен подпрозорец"
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Машина"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Изглед"
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/de_DE.po xen-4.10.0/tools/qemu-xen/po/de_DE.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/de_DE.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/de_DE.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 1.4.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2012-02-28 16:00+0100\n"
+ "Last-Translator: Kevin Wolf <kwolf@redhat.com>\n"
+ "Language-Team: Deutsch <de@li.org>\n"
+@@ -16,74 +16,74 @@
+ "Content-Transfer-Encoding: 8bit\n"
+ "Plural-Forms: nplurals=2; plural=(n!=1);\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " - Strg+Alt+G drücken, um Eingabegeräte freizugeben"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [Angehalten]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Angehalten"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "_Reset"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Herunterfahren"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr "_Beenden"
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr "_Vollbild"
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr "_Kopieren"
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr "_Heranzoomen"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr "_Wegzoomen"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr "_Einpassen"
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Auf _Fenstergröße skalieren"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Tastatur _automatisch einfangen"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "_Eingabegeräte einfangen"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "Reiter anzeigen"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr "Reiter abtrennen"
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Maschine"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Ansicht"
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/fr_FR.po xen-4.10.0/tools/qemu-xen/po/fr_FR.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/fr_FR.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/fr_FR.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 1.4.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2014-07-28 23:25+0200\n"
+ "Last-Translator: Aurelien Jarno <aurelien@aurel32.net>\n"
+ "Language-Team: French <FR@li.org>\n"
+@@ -17,74 +17,74 @@
+ "Plural-Forms: nplurals=2; plural=n != 1;\n"
+ "X-Generator: Lokalize 1.4\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr "- Appuyer sur Ctrl+Alt+G pour arrêter la capture"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [En pause]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Pause"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "_Réinitialiser"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Éteindre"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr "_Quitter"
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr "Mode _plein écran"
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr "_Copier"
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr "Zoom _avant"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr "_Zoom arrière"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr "Zoom _idéal"
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Zoomer pour a_juster"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Capturer en _survolant"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "_Capturer les entrées"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "Montrer les _onglets"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr "_Détacher l'onglet"
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Machine"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Vue"
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/hu.po xen-4.10.0/tools/qemu-xen/po/hu.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/hu.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/hu.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 1.4.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2013-05-06 20:42+0200\n"
+ "Last-Translator: Ákos Kovács <akoskovacs@gmx.com>\n"
+ "Language-Team: Hungarian <hu@li.org>\n"
+@@ -15,77 +15,77 @@
+ "Content-Type: text/plain; charset=UTF-8\n"
+ "Content-Transfer-Encoding: 8bit\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " - Nyomj Ctrl+Alt+G-t a bemeneti eszközök elengedéséhez"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [Megállítva]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Megállítás"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "Új_raindítás"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Leállítás"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr ""
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr ""
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ #, fuzzy
+ msgid "Zoom _In"
+ msgstr "Ablakmérethez _igazítás"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ #, fuzzy
+ msgid "Zoom _Out"
+ msgstr "Ablakmérethez _igazítás"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Ablakmérethez _igazítás"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Automatikus _elfogás"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "_Bemeneti eszközök megragadása"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "_Fülek megjelenítése"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr ""
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Gép"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Nézet"
+ 
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/it.po xen-4.10.0/tools/qemu-xen/po/it.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/it.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/it.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 1.4.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2014-07-29 08:25+0200\n"
+ "Last-Translator: Paolo Bonzini <pbonzini@redhat.com>\n"
+ "Language-Team: Italian <it@li.org>\n"
+@@ -16,74 +16,74 @@
+ "Content-Transfer-Encoding: 8bit\n"
+ "Plural-Forms: nplurals=2; plural=n != 1;\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " - Premere Ctrl+Alt+G per rilasciare l'input"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [Pausa]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Pausa"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "_Reset"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Spegni"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr "_Esci"
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr "A t_utto schermo"
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr "_Copia"
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr "_Aumenta zoom"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr "_Riduci zoom"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr "A_nnulla zoom"
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Adatta alla _finestra"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Cattura _automatica input"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "_Cattura input"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "Mostra _tab"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr "_Sposta in una nuova finestra"
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Macchina virtuale"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Visualizza"
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/messages.po xen-4.10.0/tools/qemu-xen/po/messages.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/messages.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/messages.po	2019-09-18 19:17:34.437920000 +0100
+@@ -5,9 +5,9 @@
+ #, fuzzy
+ msgid ""
+ msgstr ""
+-"Project-Id-Version: QEMU 2.7.93\n"
++"Project-Id-Version: QEMU 2.10.1\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+ "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+ "Language-Team: LANGUAGE <LL@li.org>\n"
+@@ -16,74 +16,74 @@
+ "Content-Type: text/plain; charset=UTF-8\n"
+ "Content-Transfer-Encoding: 8bit\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr ""
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr ""
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr ""
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr ""
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr ""
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr ""
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr ""
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr ""
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr ""
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr ""
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr ""
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr ""
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr ""
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr ""
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr ""
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/tr.po xen-4.10.0/tools/qemu-xen/po/tr.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/tr.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/tr.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 1.4.50\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2013-04-22 18:35+0300\n"
+ "Last-Translator: Ozan Çağlayan <ozancag@gmail.com>\n"
+ "Language-Team: Türkçe <>\n"
+@@ -17,76 +17,76 @@
+ "Plural-Forms: nplurals=1; plural=0;\n"
+ "X-Generator: Gtranslator 2.91.6\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " - Yakalamayı durdurmak için Ctrl+Alt+G tuşlarına basın"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [Duraklatıldı]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "_Duraklat"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "_Sıfırla"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "_Kapat"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr ""
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr ""
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ #, fuzzy
+ msgid "Zoom _In"
+ msgstr "Yakınlaş ve Sığ_dır"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ #, fuzzy
+ msgid "Zoom _Out"
+ msgstr "Yakınlaş ve Sığ_dır"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr ""
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "Yakınlaş ve Sığ_dır"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "Ü_zerindeyken Yakala"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "Girdiyi _Yakala"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "Se_kmeleri Göster"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr ""
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "_Makine"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "_Görüntüle"
+diff -ru xen-4.10.0-origin/tools/qemu-xen/po/zh_CN.po xen-4.10.0/tools/qemu-xen/po/zh_CN.po
+--- xen-4.10.0-origin/tools/qemu-xen/po/zh_CN.po	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/po/zh_CN.po	2019-09-18 19:17:34.437920000 +0100
+@@ -6,7 +6,7 @@
+ msgstr ""
+ "Project-Id-Version: QEMU 2.2\n"
+ "Report-Msgid-Bugs-To: qemu-devel@nongnu.org\n"
+-"POT-Creation-Date: 2016-12-13 21:46+0000\n"
++"POT-Creation-Date: 2019-09-17 02:45+0200\n"
+ "PO-Revision-Date: 2014-07-31 10:00+0800\n"
+ "Last-Translator: Fam Zheng <famz@redhat.com>\n"
+ "Language-Team: Chinese <zh@li.org>\n"
+@@ -17,74 +17,74 @@
+ "Plural-Forms: nplurals=2; plural=n != 1;\n"
+ "X-Generator: Lokalize 1.4\n"
+ 
+-#: ui/gtk.c:275
++#: ui/gtk.c:288
+ msgid " - Press Ctrl+Alt+G to release grab"
+ msgstr " - 按下 Ctrl+Alt+G 取消捕获"
+ 
+-#: ui/gtk.c:279
++#: ui/gtk.c:292
+ msgid " [Paused]"
+ msgstr " [已暂停]"
+ 
+-#: ui/gtk.c:1922
++#: ui/gtk.c:1988
+ msgid "_Pause"
+ msgstr "暂停(_P)"
+ 
+-#: ui/gtk.c:1928
++#: ui/gtk.c:1994
+ msgid "_Reset"
+ msgstr "重置(_R)"
+ 
+-#: ui/gtk.c:1931
++#: ui/gtk.c:1997
+ msgid "Power _Down"
+ msgstr "关闭电源(_D)"
+ 
+-#: ui/gtk.c:1937
++#: ui/gtk.c:2003
+ msgid "_Quit"
+ msgstr "退出(_Q)"
+ 
+-#: ui/gtk.c:2029
++#: ui/gtk.c:2095
+ msgid "_Fullscreen"
+ msgstr "全屏(_F)"
+ 
+-#: ui/gtk.c:2032
++#: ui/gtk.c:2098
+ msgid "_Copy"
+ msgstr "复制(_C)"
+ 
+-#: ui/gtk.c:2048
++#: ui/gtk.c:2114
+ msgid "Zoom _In"
+ msgstr "放大(_I)"
+ 
+-#: ui/gtk.c:2055
++#: ui/gtk.c:2123
+ msgid "Zoom _Out"
+ msgstr "缩小(_O)"
+ 
+-#: ui/gtk.c:2062
++#: ui/gtk.c:2130
+ msgid "Best _Fit"
+ msgstr "最合适大小(_F)"
+ 
+-#: ui/gtk.c:2069
++#: ui/gtk.c:2137
+ msgid "Zoom To _Fit"
+ msgstr "缩放以适应大小(_F)"
+ 
+-#: ui/gtk.c:2075
++#: ui/gtk.c:2143
+ msgid "Grab On _Hover"
+ msgstr "鼠标经过时捕获(_H)"
+ 
+-#: ui/gtk.c:2078
++#: ui/gtk.c:2146
+ msgid "_Grab Input"
+ msgstr "捕获输入(_G)"
+ 
+-#: ui/gtk.c:2107
++#: ui/gtk.c:2175
+ msgid "Show _Tabs"
+ msgstr "显示标签页(_T)"
+ 
+-#: ui/gtk.c:2110
++#: ui/gtk.c:2178
+ msgid "Detach Tab"
+ msgstr "分离标签页"
+ 
+-#: ui/gtk.c:2122
++#: ui/gtk.c:2190
+ msgid "_Machine"
+ msgstr "虚拟机(_M)"
+ 
+-#: ui/gtk.c:2127
++#: ui/gtk.c:2195
+ msgid "_View"
+ msgstr "视图(_V)"
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: ipxe
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: openbios
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: openhackware
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: QemuMacDrivers
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: qemu-palcode
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: seabios
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: sgabios
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: skiboot
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: SLOF
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: u-boot
+Seulement dans xen-4.10.0-origin/tools/qemu-xen/roms: vgabios
+diff -ru xen-4.10.0-origin/tools/qemu-xen/util/memfd.c xen-4.10.0/tools/qemu-xen/util/memfd.c
+--- xen-4.10.0-origin/tools/qemu-xen/util/memfd.c	2017-11-09 16:46:00.000000000 +0100
++++ xen-4.10.0/tools/qemu-xen/util/memfd.c	2019-09-18 19:17:34.541925000 +0100
+@@ -31,9 +31,10 @@
+ 
+ #include "qemu/memfd.h"
+ 
+-#ifdef CONFIG_MEMFD
+-#include <sys/memfd.h>
+-#elif defined CONFIG_LINUX
++//#ifdef CONFIG_MEMFD
++//#include <sys/memfd.h>
++//#elif defined CONFIG_LINUX
++#if defined CONFIG_LINUX && !defined CONFIG_MEMFD
+ #include <sys/syscall.h>
+ #include <asm/unistd.h>
+ 
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/linux-user: i386
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: bios.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: ppc_rom.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: pxe-e1000.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: pxe-ne2k_pci.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: pxe-pcnet.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: pxe-rtl8139.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: vgabios.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/pc-bios: vgabios-cirrus.bin
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/tcg: i386
+Seulement dans xen-4.10.0-origin/tools/qemu-xen-traditional/tests/cris: .gdbinit
+diff -ru xen-4.10.0-origin/tools/tests/xenstore/xs-test.c xen-4.10.0/tools/tests/xenstore/xs-test.c
+--- xen-4.10.0-origin/tools/tests/xenstore/xs-test.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/tests/xenstore/xs-test.c	2019-09-18 19:17:34.545925000 +0100
+@@ -445,7 +445,7 @@
+ 
+ int main(int argc, char *argv[])
+ {
+-    int opt, t, iters = 1, ret = 0, randtime = 0;
++    int opt, t, iters = 1, ret = 0, randtime = 0, return_asprintf = 0;
+     char *test = NULL;
+     bool list = false;
+     time_t stop;
+@@ -482,11 +482,11 @@
+         return 0;
+     }
+ 
+-    asprintf(&path, "%s/%u", TEST_PATH, getpid());
++    return_asprintf = asprintf(&path, "%s/%u", TEST_PATH, getpid());
+     for ( t = 0; t < WRITE_BUFFERS_N; t++ )
+     {
+         memset(write_buffers[t], 'a' + t, WRITE_BUFFERS_SIZE);
+-        asprintf(&paths[t], "%s/%c", path, 'a' + t);
++        return_asprintf = asprintf(&paths[t], "%s/%c", path, 'a' + t);
+     }
+ 
+     xsh = xs_open(0);
+Seulement dans xen-4.10.0-origin/tools/xenstore: xenstored_probes.d
+diff -ru xen-4.10.0-origin/tools/xl/xl.c xen-4.10.0/tools/xl/xl.c
+--- xen-4.10.0-origin/tools/xl/xl.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl.c	2019-09-18 19:17:34.549925000 +0100
+@@ -28,6 +28,7 @@
+ #include <libxl_utils.h>
+ #include <libxlutil.h>
+ #include "xl.h"
++//#include <execinfo.h>
+ 
+ xentoollog_logger_stdiostream *logger;
+ int dryrun_only;
+@@ -51,6 +52,7 @@
+ xentoollog_level minmsglevel = minmsglevel_default;
+ 
+ int logfile = 2;
++int is_vtf_cmd = 0;
+ 
+ /* every libxl action in xl uses this same libxl context */
+ libxl_ctx *ctx;
+@@ -195,6 +197,10 @@
+         max_grant_frames = l;
+     else {
+         libxl_physinfo_init(&physinfo);
++        if(is_vtf_cmd){
++            physinfo.domain_unpriv = LIBXL_DOMAIN_UNPRIV_DOMU;
++            //printf("%d\n", (int)physinfo.domain_unpriv);
++        }
+         max_grant_frames = (libxl_get_physinfo(ctx, &physinfo) != 0 ||
+                             !(physinfo.max_possible_mfn >> 32))
+                            ? 32 : 64;
+@@ -366,6 +372,10 @@
+     if (ret)
+         fprintf(stderr, "Failed to read config file: %s: %s\n",
+                 XL_GLOBAL_CONFIG, strerror(errno));
++
++    if(!strcmp(cmd, "vtf"))
++        is_vtf_cmd = 1;
++        
+     parse_global_config(XL_GLOBAL_CONFIG, config_data, config_len);
+     free(config_data);
+ 
+@@ -389,6 +399,7 @@
+         fprintf(stderr, "command not implemented\n");
+         ret = EXIT_FAILURE;
+     }
++    
+ 
+  xit:
+     return ret;
+@@ -415,6 +426,28 @@
+     int i;
+     struct cmd_spec *cmd;
+ 
++
++   /* void *array[10];
++  size_t size;
++  char **strings, *pText, *pPosition;
++  int find=0;
++
++  size = backtrace (array, 10);
++  strings = backtrace_symbols (array, size);
++
++  printf ("Obtained %zd stack frames.\n", size);
++
++  for (i = 0; i < size && find==0; i++)
++  {
++     pText=strings[i];
++     if((pPosition=strstr(pText, "dummy"))!=NULL)
++	  find=1;
++     //printf ("%s\n", strings[i]);
++  }
++  printf("%s - %d - %d\n", pPosition, find, (int)i);
++  free (strings);*/
++
++
+     if (!command || !strcmp(command, "help")) {
+         printf("Usage xl [-vfN] <subcommand> [args]\n\n");
+         printf("xl full list of subcommands:\n\n");
+diff -ru xen-4.10.0-origin/tools/xl/xl_cmdtable.c xen-4.10.0/tools/xl/xl_cmdtable.c
+--- xen-4.10.0-origin/tools/xl/xl_cmdtable.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl_cmdtable.c	2019-09-18 19:17:34.549925000 +0100
+@@ -47,6 +47,39 @@
+       "-f FILE, --defconfig=FILE\n                     Use the given configuration file.\n"
+       "-d                      Enable debug messages.\n"
+     },
++    { "vtf",
++      &main_vtf, 0, 0,
++      "Informations about VTF (Virtual Technology Extensions)",
++      "[options] [VMX] [process_pid]",
++      "-l, --list               List VMX supported by the vtf library\n"
++      "-e, --enable             Enable a vtf for this domain\n"
++      "-d, --disable            Disable a vtf for this domain\n"
++      "-h  --help               Print this help."
++    },
++    { "enable-logdirty",
++      &main_enable_logdirty, 1, 1,
++      "Enable log dirty mode for domain <domid>",
++      "[options] [Domain]",
++      "-h                      Print this help.\n"
++    },
++    { "collect-dirty-logs",
++      &main_collect_dirty_logs, 1, 1,
++      "Collect dirty pages from pml buffer for domain <domid>",
++      "[options] [Domain]",
++      "-h                      Print this help.\n"
++    },
++    { "clean-dirty-bitmap",
++      &main_clean_dirty_bitmap, 1, 1,
++      "Clean the dirty bitmap of domain <domid>",
++      "[options] [Domain]",
++      "-h                      Print this help.\n"
++    },
++    { "disable-logdirty",
++      &main_disable_logdirty, 1, 1,
++      "Disable log dirty mode for domain <domid>",
++      "[options] [Domain]",
++      "-h                      Print this help.\n"
++    },
+     { "list",
+       &main_list, 0, 0,
+       "List information about all/some domains",
+diff -ru xen-4.10.0-origin/tools/xl/xl.h xen-4.10.0/tools/xl/xl.h
+--- xen-4.10.0-origin/tools/xl/xl.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl.h	2019-09-18 19:17:34.549925000 +0100
+@@ -136,6 +136,11 @@
+ int main_destroy(int argc, char **argv);
+ int main_shutdown(int argc, char **argv);
+ int main_reboot(int argc, char **argv);
++int main_vtf(int argc, char **argv);
++int main_collect_dirty_logs(int argc, char **argv);
++int main_clean_dirty_bitmap(int argc, char **argv);
++int main_enable_logdirty(int argc, char **argv);
++int main_disable_logdirty(int argc, char **argv);
+ int main_list(int argc, char **argv);
+ int main_vm_list(int argc, char **argv);
+ int main_create(int argc, char **argv);
+diff -ru xen-4.10.0-origin/tools/xl/xl_mem.c xen-4.10.0/tools/xl/xl_mem.c
+--- xen-4.10.0-origin/tools/xl/xl_mem.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl_mem.c	2019-09-18 19:17:34.549925000 +0100
+@@ -158,6 +158,18 @@
+     return EXIT_SUCCESS;
+ }
+ 
++int main_collect_dirty_logs(int argc, char **argv)
++{
++    uint32_t domid = atoi(argv[1]);
++    return libxl_collect_dirty_logs(ctx, domid);
++}
++
++int main_clean_dirty_bitmap(int argc, char **argv)
++{
++    uint32_t domid = atoi(argv[1]);
++    return libxl_clean_dirty_bitmap(ctx, domid);
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/xl/xl_vcpu.c xen-4.10.0/tools/xl/xl_vcpu.c
+--- xen-4.10.0-origin/tools/xl/xl_vcpu.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl_vcpu.c	2019-09-21 18:07:10.436942000 +0100
+@@ -11,7 +11,7 @@
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU Lesser General Public License for more details.
+  */
+-
++ 
+ #include <stdlib.h>
+ 
+ #include <libxl.h>
+@@ -328,6 +328,52 @@
+     return EXIT_SUCCESS;
+ }
+ 
++int main_vtf(int argc, char **argv)
++{
++    #define LIST 1
++    #define ENABLE 2
++    #define DISABLE 3
++
++    int opt, arg=0, pid_idx=0;//, *pid_list
++    uint32_t pid_list[25];
++    char *hw = NULL;
++    static struct option opts[] = {
++        {"list", 0, 0, 'l'},
++        {"enable", 1, 0, 'e'},
++        {"disable", 1, 0, 'd'},
++        COMMON_LONG_OPTS
++    };
++
++    SWITCH_FOREACH_OPT(opt, "led", opts, "vtf", 0) {
++        case 'l':
++            arg = LIST;
++            break;
++        case 'e':
++            arg = ENABLE;
++            hw = optarg;
++            break;
++        case 'd':
++            arg = DISABLE;
++            hw = optarg;
++            break;
++    }
++    
++    hw = argv[optind];
++    argc--;
++
++    if( argc > 3 && !strcmp(argv[++optind], "-p") )
++    {
++        while(optind < argc)
++        {
++            pid_list[pid_idx++] = atoi(argv[++optind]);
++            printf("pid_list[%d] : %d\n", pid_idx-1, pid_list[pid_idx-1]);
++        }
++        pid_list[pid_idx] = (int)(uintptr_t)NULL;
++    }
++    
++    return libxl_vtf(ctx, arg, hw, pid_list);
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff -ru xen-4.10.0-origin/tools/xl/xl_vmcontrol.c xen-4.10.0/tools/xl/xl_vmcontrol.c
+--- xen-4.10.0-origin/tools/xl/xl_vmcontrol.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/tools/xl/xl_vmcontrol.c	2019-09-18 19:17:34.549925000 +0100
+@@ -1214,6 +1214,18 @@
+     return 0;
+ }
+ 
++int main_enable_logdirty(int argc, char **argv)
++{
++    uint32_t domid = atoi(argv[1]);
++    return libxl_domain_enable_logdirty(ctx, domid);
++}
++
++int main_disable_logdirty(int argc, char **argv)
++{
++    uint32_t domid = atoi(argv[1]);
++    return libxl_domain_disable_logdirty(ctx, domid);
++}
++
+ /*
+  * Local variables:
+  * mode: C
+Seulement dans xen-4.10.0/: .vscode
+diff -ru xen-4.10.0-origin/xen/arch/arm/hvm.c xen-4.10.0/xen/arch/arm/hvm.c
+--- xen-4.10.0-origin/xen/arch/arm/hvm.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/arm/hvm.c	2019-09-18 19:17:34.553925000 +0100
+@@ -30,13 +30,22 @@
+ #include <public/hvm/hvm_op.h>
+ 
+ #include <asm/hypercall.h>
+-
++ 
+ long do_hvm_op(unsigned long op, XEN_GUEST_HANDLE_PARAM(void) arg)
+ {
+     long rc = 0;
+ 
+     switch ( op )
+     {
++    /*case HVMOP_vtf_context_switch:
++    {
++        struct xen_hvm_param vtf;
++
++        if ( copy_from_guest(&vtf, arg, 1) )
++            return -EFAULT;
++        
++        printk("pids received prev : , next : ", vtf.index, vtf.value);
++    }*/
+     case HVMOP_set_param:
+     case HVMOP_get_param:
+     {
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: boot.init.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: boot.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .boot.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .boot.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: cpufreq.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: .cpufreq.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: .cpufreq.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: powernow.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: .powernow.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi/cpufreq: .powernow.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: cpuidle_menu.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .cpuidle_menu.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .cpuidle_menu.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: cpu_idle.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .cpu_idle.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .cpu_idle.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: lib.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .lib.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .lib.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: power.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .power.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .power.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: suspend.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .suspend.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .suspend.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: wakeup_prot.o
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .wakeup_prot.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/acpi: .wakeup_prot.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: alternative.o
+Seulement dans xen-4.10.0/xen/arch/x86: .alternative.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .alternative.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: apic.o
+Seulement dans xen-4.10.0/xen/arch/x86: .apic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .apic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: asm-offsets.s
+Seulement dans xen-4.10.0/xen/arch/x86: .asm-offsets.s.d
+Seulement dans xen-4.10.0/xen/arch/x86: .asm-offsets.s.d2
+Seulement dans xen-4.10.0/xen/arch/x86: bitops.o
+Seulement dans xen-4.10.0/xen/arch/x86: .bitops.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .bitops.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/boot: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/boot: cmdline.bin
+Seulement dans xen-4.10.0/xen/arch/x86/boot: cmdline.lnk
+Seulement dans xen-4.10.0/xen/arch/x86/boot: cmdline.o
+Seulement dans xen-4.10.0/xen/arch/x86/boot: cmdline.S
+Seulement dans xen-4.10.0/xen/arch/x86/boot: head.o
+Seulement dans xen-4.10.0/xen/arch/x86/boot: .head.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/boot: .head.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/boot: mkelf32
+Seulement dans xen-4.10.0/xen/arch/x86/boot: reloc.bin
+Seulement dans xen-4.10.0/xen/arch/x86/boot: reloc.lnk
+Seulement dans xen-4.10.0/xen/arch/x86/boot: reloc.o
+Seulement dans xen-4.10.0/xen/arch/x86/boot: reloc.S
+Seulement dans xen-4.10.0/xen/arch/x86: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86: bzimage.init.o
+Seulement dans xen-4.10.0/xen/arch/x86: bzimage.o
+Seulement dans xen-4.10.0/xen/arch/x86: .bzimage.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .bzimage.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: clear_page.o
+Seulement dans xen-4.10.0/xen/arch/x86: .clear_page.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .clear_page.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: compat.o
+Seulement dans xen-4.10.0/xen/arch/x86: .compat.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .compat.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: copy_page.o
+Seulement dans xen-4.10.0/xen/arch/x86: .copy_page.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .copy_page.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: amd.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .amd.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .amd.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: centaur.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .centaur.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .centaur.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: common.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .common.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .common.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: intel_cacheinfo.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .intel_cacheinfo.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .intel_cacheinfo.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: intel.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .intel.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .intel.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: amd_nonfatal.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .amd_nonfatal.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .amd_nonfatal.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: barrier.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .barrier.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .barrier.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mcaction.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mcaction.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mcaction.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mce_amd.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce_amd.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce_amd.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mce-apei.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce-apei.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce-apei.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mce_intel.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce_intel.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce_intel.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mce.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mce.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: mctelem.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mctelem.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .mctelem.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: non-fatal.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .non-fatal.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .non-fatal.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: util.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .util.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .util.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: vmce.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .vmce.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mcheck: .vmce.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: generic.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: .generic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: .generic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: main.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: .main.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu/mtrr: .main.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: mwait-idle.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .mwait-idle.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .mwait-idle.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: vpmu_amd.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu_amd.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu_amd.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: vpmu_intel.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu_intel.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu_intel.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: vpmu.o
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/cpu: .vpmu.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: cpuid.o
+Seulement dans xen-4.10.0/xen/arch/x86: .cpuid.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .cpuid.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: crash.o
+Seulement dans xen-4.10.0/xen/arch/x86: .crash.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .crash.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: debug.o
+Seulement dans xen-4.10.0/xen/arch/x86: .debug.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .debug.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: delay.o
+Seulement dans xen-4.10.0/xen/arch/x86: .delay.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .delay.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: dmi_scan.init.o
+Seulement dans xen-4.10.0/xen/arch/x86: dmi_scan.o
+Seulement dans xen-4.10.0/xen/arch/x86: .dmi_scan.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .dmi_scan.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: dom0_build.init.o
+Seulement dans xen-4.10.0/xen/arch/x86: dom0_build.o
+Seulement dans xen-4.10.0/xen/arch/x86: .dom0_build.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .dom0_build.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/domain.c xen-4.10.0/xen/arch/x86/domain.c
+--- xen-4.10.0-origin/xen/arch/x86/domain.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/domain.c	2020-02-10 20:43:50.529504000 +0100
+@@ -102,7 +102,7 @@
+      * as they may be freed at any time. In this case, heap corruption or
+      * #PF can occur (when heap debugging is enabled). For example, even
+      * printk() can involve tasklet scheduling, which touches per-cpu vars.
+-     * 
++     *
+      * Consider very carefully when adding code to *dead_idle. Most hypervisor
+      * subsystems are unsafe to call.
+      */
+@@ -495,7 +495,7 @@
+         if ( (rc = init_domain_msr_policy(d)) )
+             goto fail;
+ 
+-        d->arch.ioport_caps = 
++        d->arch.ioport_caps =
+             rangeset_new(d, "I/O Ports", RANGESETF_prettyprint_hex);
+         rc = -ENOMEM;
+         if ( d->arch.ioport_caps == NULL )
+@@ -593,6 +593,8 @@
+     free_perdomain_mappings(d);
+ 
+     free_xenheap_page(d->shared_info);
++    if ( d->vtf_info.pml )
++        free_xenheap_pages(d->vtf_info.pml, d->vtf_info.pml_page_order);
+     cleanup_domain_irq_mapping(d);
+ 
+     psr_domain_free(d);
+@@ -2034,7 +2036,7 @@
+      * pending flag. These values may fluctuate (after all, we hold no
+      * locks) but the key insight is that each change will cause
+      * evtchn_upcall_pending to be polled.
+-     * 
++     *
+      * NB2. We save the running flag across the unblock to avoid a needless
+      * IPI for domains that we IPI'd to unblock.
+      */
+Seulement dans xen-4.10.0/xen/arch/x86: domain.o
+Seulement dans xen-4.10.0/xen/arch/x86: .domain.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .domain.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: domain_page.o
+Seulement dans xen-4.10.0/xen/arch/x86: .domain_page.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .domain_page.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/domctl.c xen-4.10.0/xen/arch/x86/domctl.c
+--- xen-4.10.0-origin/xen/arch/x86/domctl.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/domctl.c	2019-09-18 19:17:34.561926000 +0100
+@@ -349,7 +349,7 @@
+ 
+ #define MAX_IOPORTS 0x10000
+ 
+-long arch_do_domctl(
++long arch_do_domctl( 
+     struct xen_domctl *domctl, struct domain *d,
+     XEN_GUEST_HANDLE_PARAM(xen_domctl_t) u_domctl)
+ {
+@@ -358,15 +358,19 @@
+     long ret = 0;
+     bool copyback = false;
+     unsigned long i;
+-
++ 
+     switch ( domctl->cmd )
+     {
+-
++            
++    case XEN_DOMCTL_vtf:
+     case XEN_DOMCTL_shadow_op:
+         ret = paging_domctl(d, &domctl->u.shadow_op, u_domctl, 0);
+-        if ( ret == -ERESTART )
+-            return hypercall_create_continuation(__HYPERVISOR_arch_1,
+-                                                 "h", u_domctl);
++        if ( ret == -ERESTART ){
++            printk("%ld\n", ret);
++            if(!currd->is_vtf)
++                return hypercall_create_continuation(__HYPERVISOR_arch_1,
++                                                    "h", u_domctl);
++        }
+         copyback = true;
+         break;
+ 
+Seulement dans xen-4.10.0/xen/arch/x86: domctl.o
+Seulement dans xen-4.10.0/xen/arch/x86: .domctl.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .domctl.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: e820.o
+Seulement dans xen-4.10.0/xen/arch/x86: .e820.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .e820.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/efi: boot.c
+Seulement dans xen-4.10.0/xen/arch/x86/efi: boot.init.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: boot.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .boot.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .boot.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/efi: buildid.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: check.efi
+Seulement dans xen-4.10.0/xen/arch/x86/efi: check.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: compat.c
+Seulement dans xen-4.10.0/xen/arch/x86/efi: compat.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .compat.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .compat.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/efi: efi.h
+Seulement dans xen-4.10.0/xen/arch/x86/efi: mkreloc
+Seulement dans xen-4.10.0/xen/arch/x86/efi: relocs-dummy.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .relocs-dummy.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .relocs-dummy.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/efi: runtime.c
+Seulement dans xen-4.10.0/xen/arch/x86/efi: runtime.o
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .runtime.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/efi: .runtime.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: efi.lds
+Seulement dans xen-4.10.0/xen/arch/x86: .efi.lds.d
+Seulement dans xen-4.10.0/xen/arch/x86: .efi.lds.d2
+Seulement dans xen-4.10.0/xen/arch/x86: extable.o
+Seulement dans xen-4.10.0/xen/arch/x86: .extable.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .extable.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: flushtlb.o
+Seulement dans xen-4.10.0/xen/arch/x86: .flushtlb.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .flushtlb.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: bigsmp.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .bigsmp.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .bigsmp.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: default.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .default.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .default.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: delivery.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .delivery.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .delivery.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: probe.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .probe.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .probe.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: x2apic.o
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .x2apic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/genapic: .x2apic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: hpet.o
+Seulement dans xen-4.10.0/xen/arch/x86: .hpet.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .hpet.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: asid.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .asid.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .asid.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: dm.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .dm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .dm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: dom0_build.init.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: dom0_build.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .dom0_build.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .dom0_build.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: domain.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .domain.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .domain.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: emulate.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .emulate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .emulate.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: grant_table.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .grant_table.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .grant_table.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: hpet.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hpet.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hpet.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: hvm.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hvm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hvm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: hypercall.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hypercall.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .hypercall.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: i8254.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .i8254.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .i8254.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: intercept.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .intercept.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .intercept.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: io.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .io.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .io.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: ioreq.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .ioreq.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .ioreq.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: irq.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .irq.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .irq.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: monitor.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .monitor.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .monitor.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: mtrr.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .mtrr.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .mtrr.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: nestedhvm.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .nestedhvm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .nestedhvm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: pmtimer.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .pmtimer.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .pmtimer.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: quirks.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .quirks.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .quirks.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: rtc.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .rtc.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .rtc.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: save.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .save.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .save.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: stdvga.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .stdvga.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .stdvga.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: asid.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .asid.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .asid.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: emulate.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .emulate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .emulate.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: entry.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .entry.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .entry.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: intr.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .intr.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .intr.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: nestedsvm.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .nestedsvm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .nestedsvm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: svmdebug.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .svmdebug.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .svmdebug.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: svm.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .svm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .svm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: vmcb.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .vmcb.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/svm: .vmcb.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vioapic.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vioapic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vioapic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: viridian.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .viridian.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .viridian.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vlapic.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vlapic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vlapic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vm_event.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vm_event.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vm_event.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vmsi.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vmsi.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vmsi.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: entry.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .entry.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .entry.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: hashtab.c
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: intr.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .intr.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .intr.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: realmode.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .realmode.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .realmode.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/hvm/vmx/vmcs.c xen-4.10.0/xen/arch/x86/hvm/vmx/vmcs.c
+--- xen-4.10.0-origin/xen/arch/x86/hvm/vmx/vmcs.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/hvm/vmx/vmcs.c	2020-02-10 20:43:50.529504000 +0100
+@@ -40,6 +40,7 @@
+ #include <asm/shadow.h>
+ #include <asm/tboot.h>
+ #include <asm/apic.h>
++#define SIZE 25
+ 
+ static bool_t __read_mostly opt_vpid_enabled = 1;
+ boolean_param("vpid", opt_vpid_enabled);
+@@ -149,6 +150,13 @@
+         printk(" - none\n");
+ }
+ 
++void get_vtf_cpuinfo(struct xen_sysctl_vtf_getcpuinfo *info){
++    if(cpu_has_vmx_pml) 
++        info->pml = 1;
++    if(cpu_has_vmx_ept) 
++        info->ept = 1;
++}
++
+ static u32 adjust_vmx_controls(
+     const char *name, u32 ctl_min, u32 ctl_opt, u32 msr, bool_t *mismatch)
+ {
+@@ -1428,17 +1436,43 @@
+ 
+ int vmx_vcpu_enable_pml(struct vcpu *v)
+ {
+-    if ( vmx_vcpu_pml_enabled(v) )
++    //struct page_info *pg = vmalloc(sizeof(struct page_info));
++    struct data *dt = xzalloc(struct data), *dt_search = xzalloc(struct data);
++    struct hashtab *ht;
++    int i = 0;
++
++    if ( !v->domain->is_vtf && vmx_vcpu_pml_enabled(v) )
+         return 0;
+ 
+     v->arch.hvm_vmx.pml_pg = v->domain->arch.paging.alloc_page(v->domain);
++
++    if(v->domain->is_vtf && v->domain->vtf_pids != NULL)
++    {
++        dt->idx = NR_PML_ENTRIES - 1;
++        dt->pg = v->arch.hvm_vmx.pml_pg;
++        ht = vtf_hashmap_init();
++
++        do{
++            hashtab_insert(ht, (void *)(uintptr_t)v->domain->vtf_pids[i++], dt);
++            if(v->domain->vtf_pids[i]) printk("v->domain->vtf_pids[%d] : %d\n", i, v->domain->vtf_pids[i]);
++        }while(i < SIZE && v->domain->vtf_pids[i]);
++
++        dt->idx = 67;
++        hashtab_insert(ht, (void *)(uintptr_t)1994, dt);
++
++        printk("nb of elements inserted : %d\n", i);
++
++        dt_search = hashtab_search(ht, (void *)(uintptr_t)1994); 
++        printk("idx : %d, -- addr : %px\n", dt_search->idx, &dt_search->pg);
++    }
++
+     if ( !v->arch.hvm_vmx.pml_pg )
+         return -ENOMEM;
+ 
+     vmx_vmcs_enter(v);
+ 
+     __vmwrite(PML_ADDRESS, page_to_mfn(v->arch.hvm_vmx.pml_pg) << PAGE_SHIFT);
+-    __vmwrite(GUEST_PML_INDEX, NR_PML_ENTRIES - 1);
++    __vmwrite(GUEST_PML_INDEX, NR_PML_ENTRIES - 1); printk("enabled!\n");
+ 
+     v->arch.hvm_vmx.secondary_exec_control |= SECONDARY_EXEC_ENABLE_PML;
+ 
+@@ -1474,6 +1508,7 @@
+ {
+     uint64_t *pml_buf;
+     unsigned long pml_idx;
++    unsigned long *shared_pml;
+ 
+     ASSERT((v == current) || (!vcpu_runnable(v) && !v->is_running));
+     ASSERT(vmx_vcpu_pml_enabled(v));
+@@ -1514,6 +1549,16 @@
+ 
+         /* HVM guest: pfn == gfn */
+         paging_mark_pfn_dirty(v->domain, _pfn(gfn));
++
++        /* Save GFNs to the shared memory. */
++        spin_lock(&v->domain->vtf_pml_lock);
++
++	/* shared_pml[0] stores the index of shared_pml array. */
++        shared_pml = v->domain->vtf_info.pml;
++        if (shared_pml && shared_pml[0] < v->domain->vtf_info.nr_pml_entries)
++            shared_pml[++shared_pml[0]] = gfn;
++
++        spin_unlock(&v->domain->vtf_pml_lock);
+     }
+ 
+     unmap_domain_page(pml_buf);
+@@ -1959,6 +2004,206 @@
+ }
+ 
+ /*
++ * For the hashtab
++ */
++
++struct hashtab *hashtab_create(u32 (*hash_value)(struct hashtab *h,
++						 const void *key),
++            int (*keycmp)(struct hashtab *h, const void *key1,
++			  const void *key2), u32 size)
++{
++    struct hashtab *p = xzalloc(struct hashtab);
++
++    if ( p == NULL )
++        return p;
++
++    p->size = size;
++    p->hash_value = hash_value;
++    p->keycmp = keycmp;
++    p->htable = xzalloc_array(struct hashtab_node *, size);
++    if ( p->htable == NULL )
++    {
++        xfree(p);
++        return NULL;
++    }
++    
++    return p;
++}
++
++int hashtab_insert(struct hashtab *h, void *key, void *datum)
++{
++    u32 hvalue; 
++    struct hashtab_node *prev, *cur, *newnode;
++
++    if ( !h || h->nel == HASHTAB_MAX_NODES )
++        return -EINVAL;
++
++    hvalue = h->hash_value(h, key);
++    prev = NULL;
++    cur = h->htable[hvalue];
++    while ( cur && h->keycmp(h, key, cur->key) > 0 )
++    {
++        prev = cur;
++        cur = cur->next;
++    }
++
++    if ( cur && (h->keycmp(h, key, cur->key) == 0) )
++        return -EEXIST;
++
++    newnode = xzalloc(struct hashtab_node);
++    if ( newnode == NULL )
++        return -ENOMEM;
++    newnode->key = key;
++    newnode->datum = datum;
++    if ( prev )
++    {
++        newnode->next = prev->next;
++        prev->next = newnode;
++    }
++    else
++    {
++        newnode->next = h->htable[hvalue];
++        h->htable[hvalue] = newnode;
++    }
++
++    h->nel++; 
++    return 0;
++}
++
++void *hashtab_search(struct hashtab *h, const void *key)
++{
++    u32 hvalue;
++    struct hashtab_node *cur;
++    
++
++    if ( !h )
++        return NULL;
++    
++    hvalue = h->hash_value(h, key);
++    cur = h->htable[hvalue];
++    while ( cur != NULL && h->keycmp(h, key, cur->key) == 0 )
++        cur = cur->next;
++    
++    if ( cur == NULL || (h->keycmp(h, key, cur->key) == 0) )
++        return NULL;
++    
++    return cur->datum;
++}
++
++void hashtab_destroy(struct hashtab *h)
++{
++    u32 i;
++    struct hashtab_node *cur, *temp;
++
++    if ( !h )
++        return;
++
++    for ( i = 0; i < h->size; i++ )
++    {
++        cur = h->htable[i];
++        while ( cur != NULL )
++        {
++            temp = cur;
++            cur = cur->next;
++            xfree(temp);
++        }
++        h->htable[i] = NULL;
++    }
++
++    xfree(h->htable);
++    h->htable = NULL;
++
++    xfree(h);
++}
++
++int hashtab_map(struct hashtab *h,
++        int (*apply)(void *k, void *d, void *args),
++        void *args)
++{
++    u32 i;
++    int ret;
++    struct hashtab_node *cur;
++
++    if ( !h )
++        return 0;
++
++    for ( i = 0; i < h->size; i++ )
++    {
++        cur = h->htable[i];
++        while ( cur != NULL )
++        {
++            ret = apply(cur->key, cur->datum, args);
++            if ( ret )
++                return ret;
++            cur = cur->next;
++        }
++    }
++    return 0;
++}
++
++
++void hashtab_stat(struct hashtab *h, struct hashtab_info *info)
++{
++    u32 i, chain_len, slots_used, max_chain_len;
++    struct hashtab_node *cur;
++
++    slots_used = 0;
++    max_chain_len = 0;
++    for ( slots_used = max_chain_len = i = 0; i < h->size; i++ )
++    {
++        cur = h->htable[i];
++        if ( cur )
++        {
++            slots_used++;
++            chain_len = 0;
++            while ( cur )
++            {
++                chain_len++;
++                cur = cur->next;
++            }
++
++            if ( chain_len > max_chain_len )
++                max_chain_len = chain_len;
++        }
++    }
++
++    info->slots_used = slots_used;
++    info->max_chain_len = max_chain_len;
++}
++
++unsigned int vtf_hash(struct hashtab *h, const void *key)
++{
++    unsigned int size = h->size, keyp = (unsigned int)(uintptr_t)key;
++
++    return keyp%size;
++}
++
++int vtf_cmp(struct hashtab *h, const void *key1, const void *key2)
++{
++    int keyp1, keyp2;
++
++    keyp1 = (unsigned int)(uintptr_t)key1; 
++    keyp2 = (unsigned int)(uintptr_t)key2;
++
++    return (key1 == key2);
++}
++
++struct hashtab *vtf_hashmap_init(void)
++{
++    return hashtab_create(vtf_hash, vtf_cmp, SIZE);
++}
++
++/*struct data *new_data(uint32_t idx, struct page_info *pg)
++{
++    struct data *dt = xzalloc(struct data);
++    dt->idx = idx;
++    dt->pg = pg;
++    return dt; 
++}*/
++/*
++ */
++
++/*
+  * Local variables:
+  * mode: C
+  * c-file-style: "BSD"
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: vmcs.c.orig
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: vmcs.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vmcs.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vmcs.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/hvm/vmx/vmx.c xen-4.10.0/xen/arch/x86/hvm/vmx/vmx.c
+--- xen-4.10.0-origin/xen/arch/x86/hvm/vmx/vmx.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/hvm/vmx/vmx.c	2019-09-18 19:17:34.565926000 +0100
+@@ -93,11 +93,13 @@
+ 
+ uint8_t __read_mostly posted_intr_vector;
+ static uint8_t __read_mostly pi_wakeup_vector;
++unsigned long pml_exits;
+ 
+ void vmx_pi_per_cpu_init(unsigned int cpu)
+ {
+     INIT_LIST_HEAD(&per_cpu(vmx_pi_blocking, cpu).list);
+     spin_lock_init(&per_cpu(vmx_pi_blocking, cpu).lock);
++    pml_exits = 0;
+ }
+ 
+ static void vmx_vcpu_block(struct vcpu *v)
+@@ -3511,9 +3513,10 @@
+ 
+ void vmx_vmexit_handler(struct cpu_user_regs *regs)
+ {
+-    unsigned long exit_qualification, exit_reason, idtv_info, intr_info = 0;
+-    unsigned int vector = 0, mode;
++    unsigned long exit_qualification, exit_reason, idtv_info, intr_info = 0, sleep=0;
++    unsigned int vector = 0, mode, diff_t;
+     struct vcpu *v = current;
++    s_time_t start_t=get_s_time(), end_t;
+ 
+     __vmread(GUEST_RIP,    &regs->rip);
+     __vmread(GUEST_RSP,    &regs->rsp);
+@@ -4097,7 +4100,14 @@
+         break;
+ 
+     case EXIT_REASON_PML_FULL:
++        pml_exits = pml_exits+1; 
+         vmx_vcpu_flush_pml_buffer(v);
++        do{
++            sleep++;
++            end_t = get_s_time();
++            diff_t = end_t - start_t;
++        }while(diff_t < 4000000);
++        printk("##Th : %u, pml_exit = %lu\n",diff_t,pml_exits);
+         break;
+ 
+     case EXIT_REASON_XSAVES:
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: vmx.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vmx.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vmx.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: vvmx.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vvmx.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm/vmx: .vvmx.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vpic.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vpic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vpic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: vpt.o
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vpt.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/hvm: .vpt.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: hypercall.o
+Seulement dans xen-4.10.0/xen/arch/x86: .hypercall.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .hypercall.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: i387.o
+Seulement dans xen-4.10.0/xen/arch/x86: .i387.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .i387.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: i8259.o
+Seulement dans xen-4.10.0/xen/arch/x86: .i8259.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .i8259.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: io_apic.o
+Seulement dans xen-4.10.0/xen/arch/x86: .io_apic.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .io_apic.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: ioport_emulate.o
+Seulement dans xen-4.10.0/xen/arch/x86: .ioport_emulate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .ioport_emulate.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: irq.o
+Seulement dans xen-4.10.0/xen/arch/x86: .irq.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .irq.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: livepatch.o
+Seulement dans xen-4.10.0/xen/arch/x86: .livepatch.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .livepatch.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: machine_kexec.o
+Seulement dans xen-4.10.0/xen/arch/x86: .machine_kexec.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .machine_kexec.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: microcode_amd.o
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode_amd.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode_amd.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: microcode_intel.o
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode_intel.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode_intel.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: microcode.o
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .microcode.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: altp2m.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .altp2m.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .altp2m.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: guest_walk_2.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_2.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_2.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: guest_walk_3.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_3.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_3.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: guest_walk_4.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_4.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .guest_walk_4.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: guest_walk_2level.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_2level.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_2level.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: guest_walk_3level.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_3level.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_3level.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: guest_walk_4level.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_4level.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .guest_walk_4level.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: hap.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .hap.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .hap.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: nested_ept.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .nested_ept.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .nested_ept.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: nested_hap.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .nested_hap.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/hap: .nested_hap.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: mem_access.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_access.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_access.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: mem_paging.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_paging.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_paging.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: mem_sharing.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_sharing.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .mem_sharing.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: p2m-ept.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-ept.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-ept.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: p2m.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: p2m-pod.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-pod.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-pod.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm: p2m-pt.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-pt.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .p2m-pt.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/mm/paging.c xen-4.10.0/xen/arch/x86/mm/paging.c
+--- xen-4.10.0-origin/xen/arch/x86/mm/paging.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/mm/paging.c	2019-09-18 19:17:34.569926000 +0100
+@@ -53,6 +53,8 @@
+ #undef page_to_mfn
+ #define page_to_mfn(_pg) _mfn(__page_to_mfn(_pg))
+ 
++static bool_t vtf_cmd;
++
+ /************************************************/
+ /*              LOG DIRTY SUPPORT               */
+ /************************************************/
+@@ -84,6 +86,26 @@
+     return mfn;
+ }
+ 
++/* Alloc and init a new leaf with xxentries */
++static mfn_t paging_new_log_dirty_leaf_long(struct domain *d)
++{    
++    mfn_t mfn = paging_new_log_dirty_page(d);//mfn2, 
++    if ( mfn_valid(mfn) )
++    {
++        int i;
++        mfn_t *node = map_domain_page(mfn);
++        for ( i = 0; i < LOGDIRTY_LEAF_LONG_ENTRIES << 1; i++ )
++        {
++            /*mfn2=paging_new_log_dirty_page(d);
++            if ( mfn_valid(mfn2) )
++                clear_domain_page(mfn2);*/
++            node[i] = _mfn(INVALID_MFN);//mfn2;            
++        }       
++        unmap_domain_page(node);
++    }  
++    return mfn;
++}
++
+ /* Alloc and init a new non-leaf node */
+ static mfn_t paging_new_log_dirty_node(struct domain *d)
+ {
+@@ -133,7 +155,7 @@
+         ASSERT(rc <= 0);
+         d->arch.paging.preempt.log_dirty.done = -rc;
+     }
+-    else if ( d->arch.paging.preempt.dom != current->domain ||
++    else if ( /*!vtf_cmd ||*/ d->arch.paging.preempt.dom != current->domain ||
+               d->arch.paging.preempt.op != XEN_DOMCTL_SHADOW_OP_OFF )
+     {
+         paging_unlock(d);
+@@ -217,7 +239,7 @@
+ 
+ int paging_log_dirty_enable(struct domain *d, bool_t log_global)
+ {
+-    int ret;
++    int ret, paused=0;
+ 
+     if ( need_iommu(d) && log_global )
+     {
+@@ -231,20 +253,31 @@
+     if ( paging_mode_log_dirty(d) )
+         return -EINVAL;
+ 
+-    domain_pause(d);
++    if(!vtf_cmd){
++        domain_pause(d);
++        paused = 1;
++        printk("paused\n");
++    }
++    
+     ret = d->arch.paging.log_dirty.ops->enable(d, log_global);
+-    domain_unpause(d);
++    
++    if(paused)
++        domain_unpause(d);
+ 
+     return ret;
+ }
+ 
+ static int paging_log_dirty_disable(struct domain *d, bool_t resuming)
+ {
+-    int ret = 1;
++    int ret = 1, paused=0;
+ 
+     if ( !resuming )
+     {
+-        domain_pause(d);
++        if(!vtf_cmd){
++            domain_pause(d);
++            paused = 1;
++        }
++        
+         /* Safe because the domain is paused. */
+         if ( paging_mode_log_dirty(d) )
+         {
+@@ -257,7 +290,8 @@
+     if ( ret == -ERESTART )
+         return ret;
+ 
+-    domain_unpause(d);
++    if(paused)
++        domain_unpause(d);
+ 
+     return ret;
+ }
+@@ -265,10 +299,9 @@
+ /* Mark a page as dirty, with taking guest pfn as parameter */
+ void paging_mark_pfn_dirty(struct domain *d, pfn_t pfn)
+ {
+-    bool changed;
+     mfn_t mfn, *l4, *l3, *l2;
+-    unsigned long *l1;
+-    unsigned int i1, i2, i3, i4;
++    unsigned long *l1, *l0;
++    unsigned int i1, i2, i3, i4, decalage;
+ 
+     if ( !paging_mode_log_dirty(d) )
+         return;
+@@ -318,22 +351,57 @@
+     l2 = map_domain_page(mfn);
+     mfn = l2[i2];
+     if ( !mfn_valid(mfn) )
+-        l2[i2] = mfn = paging_new_log_dirty_leaf(d);
++        l2[i2] = mfn = paging_new_log_dirty_leaf_long(d);
+     unmap_domain_page(l2);
+     if ( !mfn_valid(mfn) )
+         goto out;
+ 
+     l1 = map_domain_page(mfn);
+-    changed = !__test_and_set_bit(i1, l1);
+-    unmap_domain_page(l1);
+-    if ( changed )
++    /*
++    *On obtient le bloc de l1 à partir d'où incrémenter
++    */
++    decalage = (i1 >> 9); //On fait i1:(PAGE_SIZE/sizeof(long)) et PAGE_SIZE(==1 << 12)/sizeof(long)(== 1 << 3) = (1 << 9)
++    i1 %= (PAGE_SIZE >> 3);//(PAGE_SIZE/sizeof(long))
++
++    mfn=l1[decalage];
++    if ( !mfn_valid(mfn) ){
++        l1[decalage] = mfn = paging_new_log_dirty_leaf(d);
++    }
++    //unmap_domain_page(l1);
++    if ( !mfn_valid(mfn) )
++        goto out;
++
++    l0=map_domain_page(mfn);
++    if(l0)
++    {
++        l0[i1]++;
++        unmap_domain_page(l0);
++    }
++
++    /*
++    *On obtient le bloc de l1 à partir d'où insérer le pfn pris en paramètres
++    */
++    decalage += LOGDIRTY_LEAF_LONG_ENTRIES;
++    mfn=l1[decalage];
++    if ( !mfn_valid(mfn) ){
++        l1[decalage] = mfn = paging_new_log_dirty_leaf(d);
++    }
++    //unmap_domain_page(l1);
++    if ( !mfn_valid(mfn) )
++        goto out;
++
++    l0=map_domain_page(mfn);
++    if(l0)
+     {
+-        PAGING_DEBUG(LOGDIRTY,
+-                     "d%d: marked mfn %" PRI_mfn " (pfn %" PRI_pfn ")\n",
+-                     d->domain_id, mfn_x(mfn), pfn_x(pfn));
+-        d->arch.paging.log_dirty.dirty_count++;
++        l0[i1] = pfn;
++        //printk("%lx\n",pfn);
++        unmap_domain_page(l0);
+     }
+ 
++    unmap_domain_page(l1);
++
++    d->arch.paging.log_dirty.dirty_count++;
++
+ out:
+     /* We've already recorded any failed allocations */
+     paging_unlock(d);
+@@ -411,8 +479,8 @@
+     int rv = 0, clean = 0, peek = 1;
+     unsigned long pages = 0;
+     mfn_t *l4 = NULL, *l3 = NULL, *l2 = NULL;
+-    unsigned long *l1 = NULL;
+-    int i4, i3, i2;
++    unsigned long *l1 = NULL, *l0=NULL;
++    int i4, i3, i2, i1, i0=0, decalage, count=0;
+ 
+     if ( !resuming )
+     {
+@@ -492,6 +560,62 @@
+                       map_domain_page(l2[i2]) : NULL);
+                 if ( unlikely(((sc->pages - pages + 7) >> 3) < bytes) )
+                     bytes = (unsigned int)((sc->pages - pages + 7) >> 3);
++                for ( i1 = 0; i1 < LOGDIRTY_LEAF_LONG_ENTRIES; i1++ )
++                {
++                    if(clean)
++                    {
++                        l0 = ((l1 && mfn_valid(l1[i1])) ? map_domain_page(l1[i1]) : NULL);
++                        if (l0)
++                        {
++                            clear_page(l0); 
++                            unmap_domain_page(l0);
++                        }
++                        decalage = i1 + LOGDIRTY_LEAF_LONG_ENTRIES;
++                        l0 = ((l1 && mfn_valid(l1[decalage])) ? map_domain_page(l1[decalage]) : NULL);
++                        if (l0)
++                        {
++                            clear_page(l0); 
++                            unmap_domain_page(l0);
++                        }
++                    }else
++                    {
++                        for( i0 = 0; i0 < LOGDIRTY_NODE_ENTRIES; i0++)
++                        {
++                            l0 = ((l1 && mfn_valid(l1[i1])) ?
++                                 map_domain_page(l1[i1]) : NULL);
++                            if(l0)
++                            {
++                                if(l0[i0]!=0)
++                                {
++                                    //printk("(WSS) %lu : ", l0[i0]);
++                                }
++                                
++                                unmap_domain_page(l0);
++                            }
++
++                            /**
++                             * Ensuite on fait un décalage pour se placer au début de la 
++                             * liste des adresses
++                             * */
++                            decalage = i1 + LOGDIRTY_LEAF_LONG_ENTRIES;
++                            /**
++                             * Maintenant on récupère les adresses elles-mêmes
++                             * */
++                            l0 = ((l1 && mfn_valid(l1[decalage])) ?
++                                 map_domain_page(l1[decalage]) : NULL);
++                            if(l0)
++                            {
++                                if(l0[i0]!=0)
++                                {
++                                    count++;
++                                    //printk("%lx\n", l0[i0]);
++                                } 
++                                unmap_domain_page(l0);
++                            }
++                        }
++
++                    }
++                }
+                 if ( likely(peek) )
+                 {
+                     if ( (l1 ? copy_to_guest_offset(sc->dirty_bitmap,
+@@ -507,8 +631,8 @@
+                 pages += bytes << 3;
+                 if ( l1 )
+                 {
+-                    if ( clean )
+-                        clear_page(l1);
++                    /*if ( clean )
++                        clear_page(l1);*/
+                     unmap_domain_page(l1);
+                 }
+             }
+@@ -536,6 +660,9 @@
+         if ( rv )
+             break;
+     }
++    //printk("[END_WSS]\n");
++    printk("%d\n", count);
++
+     if ( l4 )
+         unmap_domain_page(l4);
+ 
+@@ -667,7 +794,7 @@
+ /* vcpu paging struct initialization goes here */
+ void paging_vcpu_init(struct vcpu *v)
+ {
+-    if ( hap_enabled(v->domain) )
++    if ( hap_enabled(v->domain) ) 
+         hap_vcpu_init(v);
+     else
+         shadow_vcpu_init(v);
+@@ -679,12 +806,10 @@
+                   bool_t resuming)
+ {
+     int rc;
+-
+-    if ( unlikely(d == current->domain) )
+-    {
+-        gdprintk(XENLOG_INFO, "Tried to do a paging op on itself.\n");
+-        return -EINVAL;
+-    }
++    struct xen_domctl curop, *op = &curop;
++   
++    if ( copy_from_guest(op, u_domctl, 1) )
++        return -EFAULT; 
+ 
+     if ( unlikely(d->is_dying) )
+     {
+@@ -697,7 +822,16 @@
+     {
+         gdprintk(XENLOG_DEBUG, "Paging op on a domain (%u) with no vcpus\n",
+                  d->domain_id);
+-        return -EINVAL;
++        return -EINVAL; 
++    }
++    
++    switch (op->cmd)
++    {
++    case XEN_DOMCTL_vtf:
++        printk("XEN_DOMCTL_vtf --- paging_domctl\n");
++        vtf_cmd = 1;
++        goto vtf_op;
++        break;
+     }
+ 
+     if ( resuming
+@@ -706,6 +840,7 @@
+          : (d->arch.paging.preempt.dom &&
+             sc->op != XEN_DOMCTL_SHADOW_OP_GET_ALLOCATION) )
+     {
++        printk("resuming - %d\n", resuming);
+         printk(XENLOG_G_DEBUG
+                "%pv: Paging op %#x on Dom%u with unfinished prior op %#x by Dom%u\n",
+                current, sc->op, d->domain_id, d->arch.paging.preempt.op,
+@@ -714,8 +849,14 @@
+         return -EBUSY;
+     }
+ 
++    if ( unlikely(d == current->domain) )
++    {
++        gdprintk(XENLOG_INFO, "Tried to do a paging op on itself.\n");
++        return -EINVAL;
++    }
++
+     rc = xsm_shadow_control(XSM_HOOK, d, sc->op);
+-    if ( rc )
++    if ( rc ) 
+         return rc;
+ 
+     /* Code to handle log-dirty. Note that some log dirty operations
+@@ -725,23 +866,28 @@
+      * shadow code. For this reason, we need to further dispatch domctl
+      * to next-level paging code (shadow or hap).
+      */
++
++vtf_op:
+     switch ( sc->op )
+     {
+ 
+     case XEN_DOMCTL_SHADOW_OP_ENABLE:
+-        if ( !(sc->mode & XEN_DOMCTL_SHADOW_ENABLE_LOG_DIRTY) )
++        if ( !(sc->mode & XEN_DOMCTL_SHADOW_ENABLE_LOG_DIRTY) ) 
+             break;
+         /* Else fall through... */
+     case XEN_DOMCTL_SHADOW_OP_ENABLE_LOGDIRTY:
++        printk("XEN_DOMCTL_SHADOW_OP_ENABLE_LOGDIRTY\n");
+         return paging_log_dirty_enable(d, 1);
+ 
+     case XEN_DOMCTL_SHADOW_OP_OFF:
++        printk("XEN_DOMCTL_SHADOW_OP_OFF\n");
+         if ( (rc = paging_log_dirty_disable(d, resuming)) != 0 )
+             return rc;
+         break;
+ 
+     case XEN_DOMCTL_SHADOW_OP_CLEAN:
+     case XEN_DOMCTL_SHADOW_OP_PEEK:
++        printk("XEN_DOMCTL_SHADOW_OP_PEEK\n");
+         if ( sc->mode & ~XEN_DOMCTL_SHADOW_LOGDIRTY_FINAL )
+             return -EINVAL;
+         return paging_log_dirty_op(d, sc, resuming);
+@@ -759,7 +905,7 @@
+     struct xen_domctl op;
+     struct domain *d;
+     int ret;
+-
++    
+     if ( copy_from_guest(&op, u_domctl, 1) )
+         return -EFAULT;
+ 
+Seulement dans xen-4.10.0/xen/arch/x86/mm: paging.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .paging.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm: .paging.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: built_in.o
+diff -ru xen-4.10.0-origin/xen/arch/x86/mm/shadow/common.c xen-4.10.0/xen/arch/x86/mm/shadow/common.c
+--- xen-4.10.0-origin/xen/arch/x86/mm/shadow/common.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/mm/shadow/common.c	2019-09-18 19:17:34.569926000 +0100
+@@ -2536,11 +2536,93 @@
+ }
+ #endif
+ 
++//VMWare implementation -- Added from 4.2.0
+ /**************************************************************************/
+ /* Remove all mappings of a guest frame from the shadow tables.
+  * Returns non-zero if we need to flush TLBs. */
+ 
+-static int sh_remove_all_mappings(struct domain *d, mfn_t gmfn, gfn_t gfn)
++int sh_remove_all_mappings_vmware(struct vcpu *v, mfn_t gmfn)
++{
++    struct page_info *page = mfn_to_page(gmfn);
++
++    /* Dispatch table for getting per-type functions */
++    static const hash_domain_callback_t callbacks[SH_type_unused] = {
++        NULL, /* none    */
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 2), /* l1_32   */
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 2), /* fl1_32  */
++        NULL, /* l2_32   */
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 3), /* l1_pae  */
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 3), /* fl1_pae */
++        NULL, /* l2_pae  */
++        NULL, /* l2h_pae */
++#if CONFIG_PAGING_LEVELS >= 4
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 4), /* l1_64   */
++        SHADOW_INTERNAL_NAME(sh_rm_mappings_from_l1, 4), /* fl1_64  */
++#else
++        NULL, /* l1_64   */
++        NULL, /* fl1_64  */
++#endif
++        NULL, /* l2_64   */
++        NULL, /* l2h_64  */
++        NULL, /* l3_64   */
++        NULL, /* l4_64   */
++        NULL, /* p2m     */
++        NULL  /* unused  */
++    };
++
++    static unsigned int callback_mask = 
++          1 << SH_type_l1_32_shadow
++        | 1 << SH_type_fl1_32_shadow
++        | 1 << SH_type_l1_pae_shadow
++        | 1 << SH_type_fl1_pae_shadow
++        | 1 << SH_type_l1_64_shadow
++        | 1 << SH_type_fl1_64_shadow
++        ;
++
++    perfc_incr(shadow_mappings);
++    if ( sh_check_page_has_no_refs(page) )
++        return 0;
++
++    /* Although this is an externally visible function, we do not know
++     * whether the paging lock will be held when it is called (since it
++     * can be called via put_page_type when we clear a shadow l1e).*/
++    paging_lock_recursive(v->domain);
++
++    /* XXX TODO: 
++     * Heuristics for finding the (probably) single mapping of this gmfn */
++    
++    /* Brute-force search of all the shadows, by walking the hash */
++    perfc_incr(shadow_mappings_bf);
++    hash_domain_foreach(v->domain, callback_mask, callbacks, gmfn);
++
++    /* If that didn't catch the mapping, something is very wrong */
++    if ( !sh_check_page_has_no_refs(page) )
++    {
++        /* Don't complain if we're in HVM and there are some extra mappings: 
++         * The qemu helper process has an untyped mapping of this dom's RAM 
++         * and the HVM restore program takes another. */
++        if ( !(shadow_mode_external(v->domain)
++               && (page->count_info & PGC_count_mask) <= 3
++               && (page->u.inuse.type_info & PGT_count_mask) == 0) )
++        {
++            SHADOW_ERROR("can't find all mappings of mfn %lx: "
++                          "c=%08lx t=%08lx\n", mfn_x(gmfn), 
++                          page->count_info, page->u.inuse.type_info);
++        }
++    }
++
++    paging_unlock(v->domain);
++
++    /* We killed at least one mapping, so must flush TLBs. */
++    return 1;
++}
++//
++
++/**************************************************************************/
++/* Remove all mappings of a guest frame from the shadow tables.
++ * Returns non-zero if we need to flush TLBs. */
++
++int sh_remove_all_mappings(struct domain *d, mfn_t gmfn, gfn_t gfn)
+ {
+     struct page_info *page = mfn_to_page(gmfn);
+ 
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: common.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .common.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .common.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: guest_2.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_2.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_2.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: guest_3.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_3.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_3.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: guest_4.o
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_4.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/mm/shadow: .guest_4.o.d2
+diff -ru xen-4.10.0-origin/xen/arch/x86/mm/shadow/multi.c xen-4.10.0/xen/arch/x86/mm/shadow/multi.c
+--- xen-4.10.0-origin/xen/arch/x86/mm/shadow/multi.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/mm/shadow/multi.c	2019-09-18 19:17:34.569926000 +0100
+@@ -69,6 +69,8 @@
+ #define FETCH_TYPE_PREFETCH 1
+ #define FETCH_TYPE_DEMAND   2
+ #define FETCH_TYPE_WRITE    4
++//#define NB_ELEMS(x)  (sizeof(x) / sizeof((x)[0]))
++
+ typedef enum {
+     ft_prefetch     = FETCH_TYPE_PREFETCH,
+     ft_demand_read  = FETCH_TYPE_DEMAND,
+@@ -3090,6 +3092,18 @@
+     gfn = guest_walk_to_gfn(&gw);
+     gmfn = get_gfn(d, gfn, &p2mt);
+ 
++    //VMWare implementation
++    for(unsigned int i = 0; i < d->tot_pages ; i++)//i<100 d->tot_pages
++    {
++        if(gmfn == d->ws->inv_pages[i] && d->ws->test_inv[i] == 0)
++        {
++        	//printk("matched page %u\n", d->ws->inv_pages[i]);
++            d->ws->test_inv[i] = 1;
++            d->ws->tot_access++;
++        }
++    }
++    //
++
+     if ( shadow_mode_refcounts(d) &&
+          ((!p2m_is_valid(p2mt) && !p2m_is_grant(p2mt)) ||
+           (!p2m_is_mmio(p2mt) && !mfn_valid(gmfn))) )
+diff -ru xen-4.10.0-origin/xen/arch/x86/mm.c xen-4.10.0/xen/arch/x86/mm.c
+--- xen-4.10.0-origin/xen/arch/x86/mm.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/arch/x86/mm.c	2020-02-10 20:43:50.533508000 +0100
+@@ -4089,6 +4089,12 @@
+             if ( idx == 0 )
+                 mfn = _mfn(virt_to_mfn(d->shared_info));
+             break;
++        case XENMAPSPACE_pml_shared_info:
++            mfn = mfn_add(_mfn(virt_to_mfn(d->vtf_info.pml)), idx);
++
++            printk(XENLOG_INFO "XENMAPSPACE_pml_shared_info: idx=%lu, gpfn=%lu, mfn=%lu\n",
++                        idx, gfn_x(gpfn), mfn_x(mfn));
++            break;
+         case XENMAPSPACE_grant_table:
+             rc = gnttab_map_frame(d, idx, gpfn, &mfn);
+             if ( rc )
+Seulement dans xen-4.10.0/xen/arch/x86: mm.o
+Seulement dans xen-4.10.0/xen/arch/x86: .mm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .mm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: monitor.o
+Seulement dans xen-4.10.0/xen/arch/x86: .monitor.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .monitor.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: mpparse.o
+Seulement dans xen-4.10.0/xen/arch/x86: .mpparse.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .mpparse.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: msi.o
+Seulement dans xen-4.10.0/xen/arch/x86: .msi.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .msi.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: msr.o
+Seulement dans xen-4.10.0/xen/arch/x86: .msr.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .msr.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: nmi.o
+Seulement dans xen-4.10.0/xen/arch/x86: .nmi.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .nmi.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: numa.o
+Seulement dans xen-4.10.0/xen/arch/x86: .numa.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .numa.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: backtrace.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .backtrace.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .backtrace.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: nmi_int.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .nmi_int.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .nmi_int.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: op_model_athlon.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_athlon.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_athlon.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: op_model_p4.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_p4.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_p4.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: op_model_ppro.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_ppro.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .op_model_ppro.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: xenoprof.o
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .xenoprof.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/oprofile: .xenoprof.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: pci.o
+Seulement dans xen-4.10.0/xen/arch/x86: .pci.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .pci.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: percpu.o
+Seulement dans xen-4.10.0/xen/arch/x86: .percpu.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .percpu.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: physdev.o
+Seulement dans xen-4.10.0/xen/arch/x86: .physdev.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .physdev.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: platform_hypercall.o
+Seulement dans xen-4.10.0/xen/arch/x86: .platform_hypercall.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .platform_hypercall.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: prelink-efi.o
+Seulement dans xen-4.10.0/xen/arch/x86: prelink.o
+Seulement dans xen-4.10.0/xen/arch/x86: psr.o
+Seulement dans xen-4.10.0/xen/arch/x86: .psr.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .psr.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: callback.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .callback.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .callback.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: descriptor-tables.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .descriptor-tables.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .descriptor-tables.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: dom0_build.init.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: dom0_build.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .dom0_build.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .dom0_build.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: domain.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .domain.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .domain.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: emulate.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emulate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emulate.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: emul-gate-op.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-gate-op.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-gate-op.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: emul-inv-op.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-inv-op.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-inv-op.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: emul-priv-op.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-priv-op.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .emul-priv-op.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: gpr_switch.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .gpr_switch.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .gpr_switch.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: grant_table.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .grant_table.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .grant_table.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: hypercall.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .hypercall.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .hypercall.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: iret.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .iret.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .iret.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: misc-hypercalls.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .misc-hypercalls.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .misc-hypercalls.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: mm.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .mm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .mm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: ro-page-fault.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .ro-page-fault.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .ro-page-fault.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/pv: traps.o
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .traps.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/pv: .traps.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: setup.o
+Seulement dans xen-4.10.0/xen/arch/x86: .setup.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .setup.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: shutdown.o
+Seulement dans xen-4.10.0/xen/arch/x86: .shutdown.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .shutdown.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: smpboot.o
+Seulement dans xen-4.10.0/xen/arch/x86: .smpboot.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .smpboot.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: smp.o
+Seulement dans xen-4.10.0/xen/arch/x86: .smp.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .smp.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: srat.o
+Seulement dans xen-4.10.0/xen/arch/x86: .srat.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .srat.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: string.o
+Seulement dans xen-4.10.0/xen/arch/x86: .string.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .string.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: sysctl.o
+Seulement dans xen-4.10.0/xen/arch/x86: .sysctl.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .sysctl.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: tboot.o
+Seulement dans xen-4.10.0/xen/arch/x86: .tboot.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .tboot.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: time.o
+Seulement dans xen-4.10.0/xen/arch/x86: .time.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .time.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: trace.o
+Seulement dans xen-4.10.0/xen/arch/x86: .trace.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .trace.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: traps.o
+Seulement dans xen-4.10.0/xen/arch/x86: .traps.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .traps.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: usercopy.o
+Seulement dans xen-4.10.0/xen/arch/x86: .usercopy.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .usercopy.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: vm_event.o
+Seulement dans xen-4.10.0/xen/arch/x86: .vm_event.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .vm_event.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: acpi_mmcfg.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .acpi_mmcfg.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .acpi_mmcfg.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64/compat: built_in.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64/compat: entry.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64/compat: .entry.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64/compat: .entry.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: compat.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .compat.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .compat.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: cpufreq.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .cpufreq.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .cpufreq.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: cpu_idle.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .cpu_idle.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .cpu_idle.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: domain.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .domain.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .domain.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: entry.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .entry.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .entry.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: kexec_reloc.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .kexec_reloc.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .kexec_reloc.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: machine_kexec.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .machine_kexec.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .machine_kexec.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: mmconf-fam10h.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconf-fam10h.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconf-fam10h.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: mmconfig_64.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconfig_64.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconfig_64.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: mmconfig-shared.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconfig-shared.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mmconfig-shared.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: mm.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mm.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .mm.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: pci.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .pci.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .pci.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: physdev.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .physdev.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .physdev.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: platform_hypercall.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .platform_hypercall.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .platform_hypercall.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: traps.o
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .traps.o.d
+Seulement dans xen-4.10.0/xen/arch/x86/x86_64: .traps.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: x86_emulate.o
+Seulement dans xen-4.10.0/xen/arch/x86: .x86_emulate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .x86_emulate.o.d2
+Seulement dans xen-4.10.0/xen/arch/x86: xen.lds
+Seulement dans xen-4.10.0/xen/arch/x86: .xen.lds.d
+Seulement dans xen-4.10.0/xen/arch/x86: .xen.lds.d2
+Seulement dans xen-4.10.0/xen/arch/x86: xstate.o
+Seulement dans xen-4.10.0/xen/arch/x86: .xstate.o.d
+Seulement dans xen-4.10.0/xen/arch/x86: .xstate.o.d2
+Seulement dans xen-4.10.0/xen: .banner
+Seulement dans xen-4.10.0/xen/common: bitmap.o
+Seulement dans xen-4.10.0/xen/common: .bitmap.o.d
+Seulement dans xen-4.10.0/xen/common: .bitmap.o.d2
+Seulement dans xen-4.10.0/xen/common: bsearch.o
+Seulement dans xen-4.10.0/xen/common: .bsearch.o.d
+Seulement dans xen-4.10.0/xen/common: .bsearch.o.d2
+Seulement dans xen-4.10.0/xen/common: built_in.o
+Seulement dans xen-4.10.0/xen/common: bunzip2.init.o
+Seulement dans xen-4.10.0/xen/common: bunzip2.o
+Seulement dans xen-4.10.0/xen/common: .bunzip2.o.d
+Seulement dans xen-4.10.0/xen/common: .bunzip2.o.d2
+Seulement dans xen-4.10.0/xen/common/compat: domain.o
+Seulement dans xen-4.10.0/xen/common/compat: .domain.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .domain.o.d2
+diff -ru xen-4.10.0-origin/xen/common/compat/kernel.c xen-4.10.0/xen/common/compat/kernel.c
+--- xen-4.10.0-origin/xen/common/compat/kernel.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/compat/kernel.c	2019-09-18 19:17:34.577926000 +0100
+@@ -35,6 +35,9 @@
+ #define xen_feature_info compat_feature_info
+ #define xen_feature_info_t compat_feature_info_t
+ 
++#define xen_vtf_signal compat_vtf_signal
++#define xen_vtf_signal_t compat_vtf_signal_t
++
+ CHECK_TYPE(domain_handle);
+ 
+ #ifdef COMPAT_VM_ASSIST_VALID
+Seulement dans xen-4.10.0/xen/common/compat: kernel.o
+Seulement dans xen-4.10.0/xen/common/compat: .kernel.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .kernel.o.d2
+Seulement dans xen-4.10.0/xen/common/compat: memory.o
+Seulement dans xen-4.10.0/xen/common/compat: .memory.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .memory.o.d2
+Seulement dans xen-4.10.0/xen/common/compat: multicall.o
+Seulement dans xen-4.10.0/xen/common/compat: .multicall.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .multicall.o.d2
+Seulement dans xen-4.10.0/xen/common/compat: tmem_xen.o
+Seulement dans xen-4.10.0/xen/common/compat: .tmem_xen.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .tmem_xen.o.d2
+Seulement dans xen-4.10.0/xen/common/compat: xlat.o
+Seulement dans xen-4.10.0/xen/common/compat: .xlat.o.d
+Seulement dans xen-4.10.0/xen/common/compat: .xlat.o.d2
+Seulement dans xen-4.10.0/xen/common: core_parking.o
+Seulement dans xen-4.10.0/xen/common: .core_parking.o.d
+Seulement dans xen-4.10.0/xen/common: .core_parking.o.d2
+Seulement dans xen-4.10.0/xen/common: cpu.o
+Seulement dans xen-4.10.0/xen/common: .cpu.o.d
+Seulement dans xen-4.10.0/xen/common: .cpu.o.d2
+Seulement dans xen-4.10.0/xen/common: cpupool.o
+Seulement dans xen-4.10.0/xen/common: .cpupool.o.d
+Seulement dans xen-4.10.0/xen/common: .cpupool.o.d2
+Seulement dans xen-4.10.0/xen/common: decompress.init.o
+Seulement dans xen-4.10.0/xen/common: decompress.o
+Seulement dans xen-4.10.0/xen/common: .decompress.o.d
+Seulement dans xen-4.10.0/xen/common: .decompress.o.d2
+diff -ru xen-4.10.0-origin/xen/common/domain.c xen-4.10.0/xen/common/domain.c
+--- xen-4.10.0-origin/xen/common/domain.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/domain.c	2019-09-18 19:17:34.577926000 +0100
+@@ -41,7 +41,11 @@
+ #include <xsm/xsm.h>
+ #include <xen/trace.h>
+ #include <xen/tmem.h>
+-#include <asm/setup.h>
++#include <asm/setup.h> 
++//VMWare implementation
++#include <xen/random.h>
++#include <asm/shadow.h>
++#include <asm/random.h>
+ 
+ /* Linux config option: propageted to domain0 */
+ /* xen_processor_pmbits: xen control Cx, Px, ... */
+@@ -257,6 +261,68 @@
+ }
+ custom_param("extra_guest_irqs", parse_extra_guest_irqs);
+ 
++/*void ws_handler(void *var)
++{
++    struct domain *d = var;
++    unsigned int i = 0, teste;
++    struct page_info *page;
++    unsigned int mem;
++
++    if (d->domain_id <= 0 || d->domain_id > 20)
++        return;
++
++    mem = d->ws->tot_access  * 4 / 1024; //taille estimée en MB de la vm
++    printk("working set =  %u access = %u\n", mem, d->ws->tot_access);
++
++    d->ws->tot_access = 0;
++    page_list_for_each(page, &d->page_list)
++    {
++        d->ws->inv_pages[i++] = page_to_mfn(page);
++        teste = sh_remove_all_mappings_vmware(d->vcpu[0], page_to_mfn(page));
++        d->ws->test_inv[i] = 0;
++    }
++    flush_tlb_all();
++    set_timer(d->ws->timer, NOW() + SECONDS(60));
++}*/
++
++//VMWare implementation
++void ws_handler(void * var)
++{
++    struct domain *d = var;
++    unsigned int i = 0, j, teste;
++    struct page_info *page;
++    unsigned long rand;
++    unsigned int mem;
++
++    if(d->domain_id <= 0 || d->domain_id>20)
++        return;
++        
++    mem = d->ws->tot_access*d->tot_pages*4/100; //taille estimée en KB de la vm
++    printk("working set =  %u access = %u\n", mem, d->ws->tot_access);
++    
++    d->ws->tot_access = 0;
++    for(i=0; i<100; i++)
++    {
++        j =0;
++        rand = ((unsigned long)get_random()) % d->tot_pages;
++        page_list_for_each(page, &d->page_list)
++        {
++            if(rand == j)
++            {
++                d->ws->inv_pages[i++] = page_to_mfn(page);
++                teste = sh_remove_all_mappings_vmware(d->vcpu[0], page_to_mfn(page));
++                d->ws->test_inv[i] = 0;
++                break;
++            }
++            j++;
++        }
++    	//printk("rand = %lu\n", rand);
++    }
++    flush_tlb_all();
++    set_timer(d->ws->timer, NOW()+SECONDS(60)); 
++}
++//
++
+ struct domain *domain_create(domid_t domid, unsigned int domcr_flags,
+                              uint32_t ssidref,
+                              struct xen_arch_domainconfig *config)
+@@ -396,6 +462,18 @@
+         spin_unlock(&domlist_update_lock);
+     }
+ 
++    //VMWare implementation
++    /*working set initialization*/
++    /*if(domid > 0 && domid < 20)
++    {
++        printk("%u\n", domid);
++        d->ws = xzalloc(struct working_set);
++        d->ws->timer = xzalloc(struct timer);
++        init_timer(d->ws->timer, ws_handler, d, 0);
++        set_timer(d->ws->timer, NOW()+ SECONDS(30));
++    }*/
++    //
++
+     return d;
+ 
+  fail:
+Seulement dans xen-4.10.0/xen/common: domain.o
+Seulement dans xen-4.10.0/xen/common: .domain.o.d
+Seulement dans xen-4.10.0/xen/common: .domain.o.d2
+diff -ru xen-4.10.0-origin/xen/common/domctl.c xen-4.10.0/xen/common/domctl.c
+--- xen-4.10.0-origin/xen/common/domctl.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/domctl.c	2019-09-18 19:17:34.577926000 +0100
+@@ -379,16 +379,48 @@
+ 
+ long do_domctl(XEN_GUEST_HANDLE_PARAM(xen_domctl_t) u_domctl)
+ {
+-    long ret = 0;
++    long ret = 0; int i=0;
+     bool_t copyback = 0;
+-    struct xen_domctl curop, *op = &curop;
+-    struct domain *d;
++    struct xen_domctl curop, *op = &curop; 
++    struct domain *d = NULL;
+ 
+     if ( copy_from_guest(op, u_domctl, 1) )
+         return -EFAULT;
+ 
+     if ( op->interface_version != XEN_DOMCTL_INTERFACE_VERSION )
+         return -EACCES;
++    
++    switch (op->cmd)
++    {
++    case XEN_DOMCTL_vtf:
++        op->domain = current->domain->domain_id;
++
++        if (op->domain != 0)
++        {
++            d = rcu_lock_domain_by_id(op->domain);
++            if (!d)
++                return -ESRCH;
++                
++            /*if ( !domctl_lock_acquire() )
++            {
++                if ( d )
++                    rcu_unlock_domain(d);
++                return hypercall_create_continuation(
++                    __HYPERVISOR_domctl, "h", u_domctl); 
++            }*/
++            
++            d->is_vtf = 1; 
++            memcpy(d->vtf_pids, op->u.vtf.pids, 25*sizeof(op->u.vtf.pids[0]));
++            do{
++                printk("%d\n", d->vtf_pids[i++]);
++            }while(d->vtf_pids[i]);
++            
++            ret = arch_do_domctl(op, d, u_domctl);
++        }
++
++        goto domctl_out_unlock_domonly;
++        break;
++    }
+ 
+     switch ( op->cmd )
+     {
+@@ -396,11 +428,11 @@
+         if ( op->domain == DOMID_INVALID )
+         {
+     case XEN_DOMCTL_createdomain:
+-    case XEN_DOMCTL_gdbsx_guestmemio:
++    case XEN_DOMCTL_gdbsx_guestmemio: 
+             d = NULL;
+             break;
+-        }
+-        /* fall through */
++        }    
++    /* fall through */
+     default:
+         d = rcu_lock_domain_by_id(op->domain);
+         if ( !d && op->cmd != XEN_DOMCTL_getdomaininfo )
+@@ -1156,13 +1188,16 @@
+         break;
+ 
+     default:
++    //vtf_goto:
+         ret = arch_do_domctl(op, d, u_domctl);
++        printk("out_default\n");
+         break;
+     }
+ 
+     domctl_lock_release();
+ 
+  domctl_out_unlock_domonly:
++    printk("domctl_out_unlock_domonly\n");
+     if ( d )
+         rcu_unlock_domain(d);
+ 
+Seulement dans xen-4.10.0/xen/common: domctl.o
+Seulement dans xen-4.10.0/xen/common: .domctl.o.d
+Seulement dans xen-4.10.0/xen/common: .domctl.o.d2
+Seulement dans xen-4.10.0/xen/common: earlycpio.init.o
+Seulement dans xen-4.10.0/xen/common: earlycpio.o
+Seulement dans xen-4.10.0/xen/common: .earlycpio.o.d
+Seulement dans xen-4.10.0/xen/common: .earlycpio.o.d2
+Seulement dans xen-4.10.0/xen/common: event_2l.o
+Seulement dans xen-4.10.0/xen/common: .event_2l.o.d
+Seulement dans xen-4.10.0/xen/common: .event_2l.o.d2
+diff -ru xen-4.10.0-origin/xen/common/event_channel.c xen-4.10.0/xen/common/event_channel.c
+--- xen-4.10.0-origin/xen/common/event_channel.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/event_channel.c	2020-02-10 22:10:41.679518000 +0100
+@@ -105,6 +105,7 @@
+     case VIRQ_DEBUG:
+     case VIRQ_XENOPROF:
+     case VIRQ_XENPMU:
++    case VIRQ_PML_FULL:
+         rc = 0;
+         break;
+     case VIRQ_ARCH_0 ... VIRQ_ARCH_7:
+Seulement dans xen-4.10.0/xen/common: event_channel.o
+Seulement dans xen-4.10.0/xen/common: .event_channel.o.d
+Seulement dans xen-4.10.0/xen/common: .event_channel.o.d2
+Seulement dans xen-4.10.0/xen/common: event_fifo.o
+Seulement dans xen-4.10.0/xen/common: .event_fifo.o.d
+Seulement dans xen-4.10.0/xen/common: .event_fifo.o.d2
+Seulement dans xen-4.10.0/xen/common: grant_table.o
+Seulement dans xen-4.10.0/xen/common: .grant_table.o.d
+Seulement dans xen-4.10.0/xen/common: .grant_table.o.d2
+Seulement dans xen-4.10.0/xen/common: guestcopy.o
+Seulement dans xen-4.10.0/xen/common: .guestcopy.o.d
+Seulement dans xen-4.10.0/xen/common: .guestcopy.o.d2
+Seulement dans xen-4.10.0/xen/common: gunzip.init.o
+Seulement dans xen-4.10.0/xen/common: gunzip.o
+Seulement dans xen-4.10.0/xen/common: .gunzip.o.d
+Seulement dans xen-4.10.0/xen/common: .gunzip.o.d2
+Seulement dans xen-4.10.0/xen/common: irq.o
+Seulement dans xen-4.10.0/xen/common: .irq.o.d
+Seulement dans xen-4.10.0/xen/common: .irq.o.d2
+diff -ru xen-4.10.0-origin/xen/common/kernel.c xen-4.10.0/xen/common/kernel.c
+--- xen-4.10.0-origin/xen/common/kernel.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/kernel.c	2019-09-18 19:17:34.581927000 +0100
+@@ -321,6 +321,7 @@
+         safe_strcpy(extraversion, deny ? xen_deny() : xen_extra_version());
+         if ( copy_to_guest(arg, extraversion, ARRAY_SIZE(extraversion)) )
+             return -EFAULT;
++
+         return 0;
+     }
+ 
+@@ -414,7 +415,7 @@
+ #endif
+             break;
+         default:
+-            return -EINVAL;
++            return -EINVAL; 
+         }
+ 
+         if ( __copy_to_guest(arg, &fi, 1) )
+@@ -423,9 +424,36 @@
+     }
+ 
+     case XENVER_pagesize:
+-        if ( deny )
++    {
++        /*xen_feature_info_t fi;
++
++        if ( copy_from_guest(&fi, arg, 1) )
++        {
++            printk("unable to copy from guest!\n");
++            return PAGE_SIZE;
++        }
++        else
++        {
++            printk("pid sent : %d\n", fi.submap_idx);
++        }
++
++        xen_vtf_signal_t *pid;
++        memset(&pid, 0, sizeof(pid));
++     
++        if (copy_from_guest(&pid, arg, 0))
++        {
++            printk("unable to copy from guest!\n");
++            return PAGE_SIZE;
++        }
++        else
++        {
++            printk("pid sent : %d\n", pid->pid_signal);
++        }*/
++        if (deny)
+             return 0;
++        
+         return (!guest_handle_is_null(arg) ? -EINVAL : PAGE_SIZE);
++    }
+ 
+     case XENVER_guest_handle:
+     {
+Seulement dans xen-4.10.0/xen/common: kernel.o
+Seulement dans xen-4.10.0/xen/common: .kernel.o.d
+Seulement dans xen-4.10.0/xen/common: .kernel.o.d2
+Seulement dans xen-4.10.0/xen/common: kexec.o
+Seulement dans xen-4.10.0/xen/common: .kexec.o.d
+Seulement dans xen-4.10.0/xen/common: .kexec.o.d2
+Seulement dans xen-4.10.0/xen/common: keyhandler.o
+Seulement dans xen-4.10.0/xen/common: .keyhandler.o.d
+Seulement dans xen-4.10.0/xen/common: .keyhandler.o.d2
+Seulement dans xen-4.10.0/xen/common: kimage.o
+Seulement dans xen-4.10.0/xen/common: .kimage.o.d
+Seulement dans xen-4.10.0/xen/common: .kimage.o.d2
+Seulement dans xen-4.10.0/xen/common/libelf: built_in.o
+Seulement dans xen-4.10.0/xen/common/libelf: libelf-dominfo.o
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-dominfo.o.d
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-dominfo.o.d2
+Seulement dans xen-4.10.0/xen/common/libelf: libelf-loader.o
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-loader.o.d
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-loader.o.d2
+Seulement dans xen-4.10.0/xen/common/libelf: libelf.o
+Seulement dans xen-4.10.0/xen/common/libelf: libelf-temp.o
+Seulement dans xen-4.10.0/xen/common/libelf: libelf-tools.o
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-tools.o.d
+Seulement dans xen-4.10.0/xen/common/libelf: .libelf-tools.o.d2
+Seulement dans xen-4.10.0/xen/common: lib.o
+Seulement dans xen-4.10.0/xen/common: .lib.o.d
+Seulement dans xen-4.10.0/xen/common: .lib.o.d2
+Seulement dans xen-4.10.0/xen/common: livepatch_elf.o
+Seulement dans xen-4.10.0/xen/common: .livepatch_elf.o.d
+Seulement dans xen-4.10.0/xen/common: .livepatch_elf.o.d2
+Seulement dans xen-4.10.0/xen/common: livepatch.o
+Seulement dans xen-4.10.0/xen/common: .livepatch.o.d
+Seulement dans xen-4.10.0/xen/common: .livepatch.o.d2
+Seulement dans xen-4.10.0/xen/common: lzo.o
+Seulement dans xen-4.10.0/xen/common: .lzo.o.d
+Seulement dans xen-4.10.0/xen/common: .lzo.o.d2
+Seulement dans xen-4.10.0/xen/common: mem_access.o
+Seulement dans xen-4.10.0/xen/common: .mem_access.o.d
+Seulement dans xen-4.10.0/xen/common: .mem_access.o.d2
+diff -ru xen-4.10.0-origin/xen/common/memory.c xen-4.10.0/xen/common/memory.c
+--- xen-4.10.0-origin/xen/common/memory.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/memory.c	2020-02-10 20:43:50.533508000 +0100
+@@ -748,13 +748,39 @@
+     unsigned int done = 0;
+     long rc = 0;
+     union xen_add_to_physmap_batch_extra extra;
++    struct page_info *page;
++    unsigned int i, order;
++
++    if (xatp->space == XENMAPSPACE_pml_shared_info && !d->vtf_info.pml) {
++        order = get_order_from_pages(xatp->size);
++        if ( (d->vtf_info.pml = alloc_xenheap_pages(order, 0)) == NULL )
++            return -ENOMEM;
++
++        d->vtf_info.pml_page_order = order;
++        d->vtf_info.nr_pml_entries = (1u << order) * PAGE_SIZE / sizeof(unsigned long) - 1;
++
++        printk(XENLOG_INFO "Init VTF shared info: page order=%u, nr_pml_entries=%u\n",
++                        d->vtf_info.pml_page_order,
++                        d->vtf_info.nr_pml_entries);
++
++        page = virt_to_page(d->vtf_info.pml);
++        for (i = 0; i < (1u << order); i++) {
++
++            printk(XENLOG_INFO "Init VTF shared info: i=%u, mfn=%lu\n",
++                        i, mfn_x(page_to_mfn(page+i)));
++
++            clear_page(page_to_virt(page+i));
++            share_xen_page_with_guest(page+i, d, XENSHARE_writable);
++        }
++    }
+ 
+     if ( xatp->space != XENMAPSPACE_gmfn_foreign )
+         extra.res0 = 0;
+     else
+         extra.foreign_domid = DOMID_INVALID;
+ 
+-    if ( xatp->space != XENMAPSPACE_gmfn_range )
++    if ( xatp->space != XENMAPSPACE_gmfn_range &&
++            xatp->space != XENMAPSPACE_pml_shared_info)
+         return xenmem_add_to_physmap_one(d, xatp->space, extra,
+                                          xatp->idx, _gfn(xatp->gpfn));
+ 
+@@ -766,7 +792,7 @@
+     xatp->size -= start;
+ 
+ #ifdef CONFIG_HAS_PASSTHROUGH
+-    if ( need_iommu(d) )
++    if ( need_iommu(d) && xatp->space != XENMAPSPACE_pml_shared_info)
+         this_cpu(iommu_dont_flush_iotlb) = 1;
+ #endif
+ 
+@@ -780,6 +806,11 @@
+         xatp->idx++;
+         xatp->gpfn++;
+ 
++        if (xatp->space == XENMAPSPACE_pml_shared_info) {
++            done++;
++            continue;
++        }
++
+         /* Check for continuation if it's not the last iteration. */
+         if ( xatp->size > ++done && hypercall_preempt_check() )
+         {
+@@ -789,7 +820,7 @@
+     }
+ 
+ #ifdef CONFIG_HAS_PASSTHROUGH
+-    if ( need_iommu(d) )
++    if ( need_iommu(d) && xatp->space != XENMAPSPACE_pml_shared_info)
+     {
+         int ret;
+ 
+Seulement dans xen-4.10.0/xen/common: memory.o
+Seulement dans xen-4.10.0/xen/common: .memory.o.d
+Seulement dans xen-4.10.0/xen/common: .memory.o.d2
+Seulement dans xen-4.10.0/xen/common: monitor.o
+Seulement dans xen-4.10.0/xen/common: .monitor.o.d
+Seulement dans xen-4.10.0/xen/common: .monitor.o.d2
+Seulement dans xen-4.10.0/xen/common: multicall.o
+Seulement dans xen-4.10.0/xen/common: .multicall.o.d
+Seulement dans xen-4.10.0/xen/common: .multicall.o.d2
+Seulement dans xen-4.10.0/xen/common: notifier.o
+Seulement dans xen-4.10.0/xen/common: .notifier.o.d
+Seulement dans xen-4.10.0/xen/common: .notifier.o.d2
+Seulement dans xen-4.10.0/xen/common: page_alloc.o
+Seulement dans xen-4.10.0/xen/common: .page_alloc.o.d
+Seulement dans xen-4.10.0/xen/common: .page_alloc.o.d2
+Seulement dans xen-4.10.0/xen/common: pdx.o
+Seulement dans xen-4.10.0/xen/common: .pdx.o.d
+Seulement dans xen-4.10.0/xen/common: .pdx.o.d2
+Seulement dans xen-4.10.0/xen/common: preempt.o
+Seulement dans xen-4.10.0/xen/common: .preempt.o.d
+Seulement dans xen-4.10.0/xen/common: .preempt.o.d2
+Seulement dans xen-4.10.0/xen/common: radix-tree.o
+Seulement dans xen-4.10.0/xen/common: .radix-tree.o.d
+Seulement dans xen-4.10.0/xen/common: .radix-tree.o.d2
+Seulement dans xen-4.10.0/xen/common: random.o
+Seulement dans xen-4.10.0/xen/common: .random.o.d
+Seulement dans xen-4.10.0/xen/common: .random.o.d2
+Seulement dans xen-4.10.0/xen/common: rangeset.o
+Seulement dans xen-4.10.0/xen/common: .rangeset.o.d
+Seulement dans xen-4.10.0/xen/common: .rangeset.o.d2
+Seulement dans xen-4.10.0/xen/common: rbtree.o
+Seulement dans xen-4.10.0/xen/common: .rbtree.o.d
+Seulement dans xen-4.10.0/xen/common: .rbtree.o.d2
+Seulement dans xen-4.10.0/xen/common: rcupdate.o
+Seulement dans xen-4.10.0/xen/common: .rcupdate.o.d
+Seulement dans xen-4.10.0/xen/common: .rcupdate.o.d2
+Seulement dans xen-4.10.0/xen/common: rwlock.o
+Seulement dans xen-4.10.0/xen/common: .rwlock.o.d
+Seulement dans xen-4.10.0/xen/common: .rwlock.o.d2
+Seulement dans xen-4.10.0/xen/common: sched_arinc653.o
+Seulement dans xen-4.10.0/xen/common: .sched_arinc653.o.d
+Seulement dans xen-4.10.0/xen/common: .sched_arinc653.o.d2
+Seulement dans xen-4.10.0/xen/common: sched_credit2.o
+Seulement dans xen-4.10.0/xen/common: .sched_credit2.o.d
+Seulement dans xen-4.10.0/xen/common: .sched_credit2.o.d2
+Seulement dans xen-4.10.0/xen/common: sched_credit.o
+Seulement dans xen-4.10.0/xen/common: .sched_credit.o.d
+Seulement dans xen-4.10.0/xen/common: .sched_credit.o.d2
+Seulement dans xen-4.10.0/xen/common: sched_null.o
+Seulement dans xen-4.10.0/xen/common: .sched_null.o.d
+Seulement dans xen-4.10.0/xen/common: .sched_null.o.d2
+Seulement dans xen-4.10.0/xen/common: sched_rt.o
+Seulement dans xen-4.10.0/xen/common: .sched_rt.o.d
+Seulement dans xen-4.10.0/xen/common: .sched_rt.o.d2
+diff -ru xen-4.10.0-origin/xen/common/schedule.c xen-4.10.0/xen/common/schedule.c
+--- xen-4.10.0-origin/xen/common/schedule.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/schedule.c	2020-02-10 22:10:17.056915000 +0100
+@@ -1487,6 +1487,8 @@
+ 
+     vcpu_periodic_timer_work(next);
+ 
++    send_guest_vcpu_virq(next, VIRQ_PML_FULL);
++
+     context_switch(prev, next);
+ }
+ 
+Seulement dans xen-4.10.0/xen/common: schedule.o
+Seulement dans xen-4.10.0/xen/common: .schedule.o.d
+Seulement dans xen-4.10.0/xen/common: .schedule.o.d2
+Seulement dans xen-4.10.0/xen/common: shutdown.o
+Seulement dans xen-4.10.0/xen/common: .shutdown.o.d
+Seulement dans xen-4.10.0/xen/common: .shutdown.o.d2
+Seulement dans xen-4.10.0/xen/common: smp.o
+Seulement dans xen-4.10.0/xen/common: .smp.o.d
+Seulement dans xen-4.10.0/xen/common: .smp.o.d2
+Seulement dans xen-4.10.0/xen/common: softirq.o
+Seulement dans xen-4.10.0/xen/common: .softirq.o.d
+Seulement dans xen-4.10.0/xen/common: .softirq.o.d2
+Seulement dans xen-4.10.0/xen/common: sort.o
+Seulement dans xen-4.10.0/xen/common: .sort.o.d
+Seulement dans xen-4.10.0/xen/common: .sort.o.d2
+Seulement dans xen-4.10.0/xen/common: spinlock.o
+Seulement dans xen-4.10.0/xen/common: .spinlock.o.d
+Seulement dans xen-4.10.0/xen/common: .spinlock.o.d2
+Seulement dans xen-4.10.0/xen/common: stop_machine.o
+Seulement dans xen-4.10.0/xen/common: .stop_machine.o.d
+Seulement dans xen-4.10.0/xen/common: .stop_machine.o.d2
+Seulement dans xen-4.10.0/xen/common: string.o
+Seulement dans xen-4.10.0/xen/common: .string.o.d
+Seulement dans xen-4.10.0/xen/common: .string.o.d2
+Seulement dans xen-4.10.0/xen/common: symbols-dummy.o
+Seulement dans xen-4.10.0/xen/common: .symbols-dummy.o.d
+Seulement dans xen-4.10.0/xen/common: .symbols-dummy.o.d2
+Seulement dans xen-4.10.0/xen/common: symbols.o
+Seulement dans xen-4.10.0/xen/common: .symbols.o.d
+Seulement dans xen-4.10.0/xen/common: .symbols.o.d2
+diff -ru xen-4.10.0-origin/xen/common/sysctl.c xen-4.10.0/xen/common/sysctl.c
+--- xen-4.10.0-origin/xen/common/sysctl.c	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/common/sysctl.c	2019-09-18 19:17:34.585927000 +0100
+@@ -28,11 +28,69 @@
+ #include <xen/pmstat.h>
+ #include <xen/livepatch.h>
+ #include <xen/gcov.h>
++#include <asm/hvm/vmx/vmcs.h>
++
++long get_physinfo(XEN_GUEST_HANDLE_PARAM(xen_sysctl_t) u_sysctl, struct xen_sysctl *op)
++{
++    struct xen_sysctl_physinfo *pi = &op->u.physinfo;
++    long ret = 0;
++
++    memset(pi, 0, sizeof(*pi));
++    pi->threads_per_core =
++        cpumask_weight(per_cpu(cpu_sibling_mask, 0));
++    pi->cores_per_socket =
++        cpumask_weight(per_cpu(cpu_core_mask, 0)) / pi->threads_per_core;
++    pi->nr_cpus = num_online_cpus();
++    pi->nr_nodes = num_online_nodes();
++    pi->max_node_id = MAX_NUMNODES-1;
++    pi->max_cpu_id = nr_cpu_ids - 1;
++    pi->total_pages = total_pages;
++    /* Protected by lock */
++    get_outstanding_claims(&pi->free_pages, &pi->outstanding_pages);
++    pi->scrub_pages = 0;
++    pi->cpu_khz = cpu_khz;
++    pi->max_mfn = get_upper_mfn_bound();
++    arch_do_physinfo(pi);
++
++    if ( copy_to_guest(u_sysctl, op, 1) )
++        ret = -EFAULT;
++    
++    return ret;
++}
++
++long do_vtfctl(struct xen_sysctl *op)
++{
++    long ret = 0;
++    struct xen_sysctl_vtf_getcpuinfo info;
++    static DEFINE_SPINLOCK(sysctl_lock);
++    
++    switch (op->u.vtf.cmd.action)
++    {
++    case XEN_SYSCTL_vtf_action_list:
++        get_vtf_cpuinfo(&info); 
++        if ( copy_to_guest_offset(op->u.vtf.buffer,
++                                      0, &info, 1) )
++            {
++                ret = -EFAULT;
++                //printk("error while copying to guest offset!!\n");
++                break;
++            }
++        //printk("copy pased!!\n");
++        break;
++    
++    default:
++        break;
++    }
++    //printk("info.pml=%d, info.ept=%d\n",info.pml, info.ept);
++
++    spin_unlock(&sysctl_lock);
++    return ret;
++}
+ 
+ long do_sysctl(XEN_GUEST_HANDLE_PARAM(xen_sysctl_t) u_sysctl)
+ {
+     long ret = 0;
+-    int copyback = -1;
++    int copyback = -1, rc=0;
+     struct xen_sysctl curop, *op = &curop;
+     static DEFINE_SPINLOCK(sysctl_lock);
+ 
+@@ -42,6 +100,30 @@
+     if ( op->interface_version != XEN_SYSCTL_INTERFACE_VERSION )
+         return -EACCES;
+ 
++    /*vtf vtf*/
++    switch ( op->cmd )
++    {
++        case XEN_SYSCTL_vtf:
++            rc=1;
++            ret = do_vtfctl(op);
++            break;
++
++        case XEN_SYSCTL_physinfo:
++            if(op->u.vtf.check) {
++                //printk("%d\n",op->u.vtf.check);
++                ret = get_physinfo(u_sysctl, op);
++                rc = 1;
++            }
++            break;
++    
++        default:
++            break;
++    }
++
++    if( rc )
++        return ret;
++    /***/
++
+     ret = xsm_sysctl(XSM_PRIV, op->cmd);
+     if ( ret )
+         return ret;
+@@ -250,27 +332,9 @@
+ 
+     case XEN_SYSCTL_physinfo:
+     {
+-        struct xen_sysctl_physinfo *pi = &op->u.physinfo;
++    
++        ret = get_physinfo(u_sysctl, op);
+ 
+-        memset(pi, 0, sizeof(*pi));
+-        pi->threads_per_core =
+-            cpumask_weight(per_cpu(cpu_sibling_mask, 0));
+-        pi->cores_per_socket =
+-            cpumask_weight(per_cpu(cpu_core_mask, 0)) / pi->threads_per_core;
+-        pi->nr_cpus = num_online_cpus();
+-        pi->nr_nodes = num_online_nodes();
+-        pi->max_node_id = MAX_NUMNODES-1;
+-        pi->max_cpu_id = nr_cpu_ids - 1;
+-        pi->total_pages = total_pages;
+-        /* Protected by lock */
+-        get_outstanding_claims(&pi->free_pages, &pi->outstanding_pages);
+-        pi->scrub_pages = 0;
+-        pi->cpu_khz = cpu_khz;
+-        pi->max_mfn = get_upper_mfn_bound();
+-        arch_do_physinfo(pi);
+-
+-        if ( copy_to_guest(u_sysctl, op, 1) )
+-            ret = -EFAULT;
+     }
+     break;
+ 
+Seulement dans xen-4.10.0/xen/common: sysctl.o
+Seulement dans xen-4.10.0/xen/common: .sysctl.o.d
+Seulement dans xen-4.10.0/xen/common: .sysctl.o.d2
+Seulement dans xen-4.10.0/xen/common: tasklet.o
+Seulement dans xen-4.10.0/xen/common: .tasklet.o.d
+Seulement dans xen-4.10.0/xen/common: .tasklet.o.d2
+Seulement dans xen-4.10.0/xen/common: time.o
+Seulement dans xen-4.10.0/xen/common: .time.o.d
+Seulement dans xen-4.10.0/xen/common: .time.o.d2
+Seulement dans xen-4.10.0/xen/common: timer.o
+Seulement dans xen-4.10.0/xen/common: .timer.o.d
+Seulement dans xen-4.10.0/xen/common: .timer.o.d2
+Seulement dans xen-4.10.0/xen/common: tmem_control.o
+Seulement dans xen-4.10.0/xen/common: .tmem_control.o.d
+Seulement dans xen-4.10.0/xen/common: .tmem_control.o.d2
+Seulement dans xen-4.10.0/xen/common: tmem.o
+Seulement dans xen-4.10.0/xen/common: .tmem.o.d
+Seulement dans xen-4.10.0/xen/common: .tmem.o.d2
+Seulement dans xen-4.10.0/xen/common: tmem_xen.o
+Seulement dans xen-4.10.0/xen/common: .tmem_xen.o.d
+Seulement dans xen-4.10.0/xen/common: .tmem_xen.o.d2
+Seulement dans xen-4.10.0/xen/common: trace.o
+Seulement dans xen-4.10.0/xen/common: .trace.o.d
+Seulement dans xen-4.10.0/xen/common: .trace.o.d2
+Seulement dans xen-4.10.0/xen/common: unlz4.init.o
+Seulement dans xen-4.10.0/xen/common: unlz4.o
+Seulement dans xen-4.10.0/xen/common: .unlz4.o.d
+Seulement dans xen-4.10.0/xen/common: .unlz4.o.d2
+Seulement dans xen-4.10.0/xen/common: unlzma.init.o
+Seulement dans xen-4.10.0/xen/common: unlzma.o
+Seulement dans xen-4.10.0/xen/common: .unlzma.o.d
+Seulement dans xen-4.10.0/xen/common: .unlzma.o.d2
+Seulement dans xen-4.10.0/xen/common: unlzo.init.o
+Seulement dans xen-4.10.0/xen/common: unlzo.o
+Seulement dans xen-4.10.0/xen/common: .unlzo.o.d
+Seulement dans xen-4.10.0/xen/common: .unlzo.o.d2
+Seulement dans xen-4.10.0/xen/common: unxz.init.o
+Seulement dans xen-4.10.0/xen/common: unxz.o
+Seulement dans xen-4.10.0/xen/common: .unxz.o.d
+Seulement dans xen-4.10.0/xen/common: .unxz.o.d2
+Seulement dans xen-4.10.0/xen/common: version.o
+Seulement dans xen-4.10.0/xen/common: .version.o.d
+Seulement dans xen-4.10.0/xen/common: .version.o.d2
+Seulement dans xen-4.10.0/xen/common: virtual_region.o
+Seulement dans xen-4.10.0/xen/common: .virtual_region.o.d
+Seulement dans xen-4.10.0/xen/common: .virtual_region.o.d2
+Seulement dans xen-4.10.0/xen/common: vmap.o
+Seulement dans xen-4.10.0/xen/common: .vmap.o.d
+Seulement dans xen-4.10.0/xen/common: .vmap.o.d2
+Seulement dans xen-4.10.0/xen/common: vm_event.o
+Seulement dans xen-4.10.0/xen/common: .vm_event.o.d
+Seulement dans xen-4.10.0/xen/common: .vm_event.o.d2
+Seulement dans xen-4.10.0/xen/common: vsprintf.o
+Seulement dans xen-4.10.0/xen/common: .vsprintf.o.d
+Seulement dans xen-4.10.0/xen/common: .vsprintf.o.d2
+Seulement dans xen-4.10.0/xen/common: wait.o
+Seulement dans xen-4.10.0/xen/common: .wait.o.d
+Seulement dans xen-4.10.0/xen/common: .wait.o.d2
+Seulement dans xen-4.10.0/xen/common: warning.init.o
+Seulement dans xen-4.10.0/xen/common: warning.o
+Seulement dans xen-4.10.0/xen/common: .warning.o.d
+Seulement dans xen-4.10.0/xen/common: .warning.o.d2
+Seulement dans xen-4.10.0/xen/common: xenoprof.o
+Seulement dans xen-4.10.0/xen/common: .xenoprof.o.d
+Seulement dans xen-4.10.0/xen/common: .xenoprof.o.d2
+Seulement dans xen-4.10.0/xen/common: xmalloc_tlsf.o
+Seulement dans xen-4.10.0/xen/common: .xmalloc_tlsf.o.d
+Seulement dans xen-4.10.0/xen/common: .xmalloc_tlsf.o.d2
+Seulement dans xen-4.10.0/xen: .config
+Seulement dans xen-4.10.0/xen/crypto: built_in.o
+Seulement dans xen-4.10.0/xen/crypto: rijndael.o
+Seulement dans xen-4.10.0/xen/crypto: .rijndael.o.d
+Seulement dans xen-4.10.0/xen/crypto: .rijndael.o.d2
+Seulement dans xen-4.10.0/xen/crypto: vmac.o
+Seulement dans xen-4.10.0/xen/crypto: .vmac.o.d
+Seulement dans xen-4.10.0/xen/crypto: .vmac.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: apei-base.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .apei-base.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .apei-base.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: apei-io.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .apei-io.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .apei-io.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: erst.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .erst.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .erst.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: hest.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .hest.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/apei: .hest.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: hwregs.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .hwregs.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .hwregs.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: numa.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .numa.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .numa.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: osl.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .osl.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .osl.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: pmstat.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .pmstat.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .pmstat.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: reboot.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .reboot.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .reboot.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbfadt.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbfadt.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbfadt.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbfadt.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbinstal.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbinstal.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbinstal.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbinstal.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbutils.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbutils.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbutils.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbxface.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbxface.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbxface.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbxface.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbxfroot.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: tbxfroot.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbxfroot.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/tables: .tbxfroot.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi: tables.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: tables.o
+Seulement dans xen-4.10.0/xen/drivers/acpi: .tables.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi: .tables.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: utglobal.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: .utglobal.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: .utglobal.o.d2
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: utmisc.init.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: utmisc.o
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: .utmisc.o.d
+Seulement dans xen-4.10.0/xen/drivers/acpi/utilities: .utmisc.o.d2
+Seulement dans xen-4.10.0/xen/drivers: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/char: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/char: console.o
+Seulement dans xen-4.10.0/xen/drivers/char: .console.o.d
+Seulement dans xen-4.10.0/xen/drivers/char: .console.o.d2
+Seulement dans xen-4.10.0/xen/drivers/char: ehci-dbgp.o
+Seulement dans xen-4.10.0/xen/drivers/char: .ehci-dbgp.o.d
+Seulement dans xen-4.10.0/xen/drivers/char: .ehci-dbgp.o.d2
+Seulement dans xen-4.10.0/xen/drivers/char: ns16550.o
+Seulement dans xen-4.10.0/xen/drivers/char: .ns16550.o.d
+Seulement dans xen-4.10.0/xen/drivers/char: .ns16550.o.d2
+Seulement dans xen-4.10.0/xen/drivers/char: serial.o
+Seulement dans xen-4.10.0/xen/drivers/char: .serial.o.d
+Seulement dans xen-4.10.0/xen/drivers/char: .serial.o.d2
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: cpufreq_misc_governors.o
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq_misc_governors.o.d
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq_misc_governors.o.d2
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: cpufreq.o
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq.o.d
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq.o.d2
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: cpufreq_ondemand.o
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq_ondemand.o.d
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .cpufreq_ondemand.o.d2
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: utility.o
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .utility.o.d
+Seulement dans xen-4.10.0/xen/drivers/cpufreq: .utility.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_acpi.init.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_acpi.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_acpi.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_acpi.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_cmd.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_cmd.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_cmd.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_detect.init.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_detect.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_detect.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_detect.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_guest.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_guest.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_guest.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_init.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_init.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_init.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_intr.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_intr.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_intr.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: iommu_map.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_map.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .iommu_map.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: pci_amd_iommu.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .pci_amd_iommu.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/amd: .pci_amd_iommu.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough: iommu.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .iommu.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .iommu.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough: io.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .io.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .io.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough: pci.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .pci.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough: .pci.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: dmar.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .dmar.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .dmar.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: intremap.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .intremap.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .intremap.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: iommu.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .iommu.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .iommu.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: qinval.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .qinval.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .qinval.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: quirks.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .quirks.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .quirks.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: utils.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .utils.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd: .utils.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: ats.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: .ats.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: .ats.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: vtd.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: .vtd.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/vtd/x86: .vtd.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: ats.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: .ats.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: .ats.o.d2
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: iommu.o
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: .iommu.o.d
+Seulement dans xen-4.10.0/xen/drivers/passthrough/x86: .iommu.o.d2
+Seulement dans xen-4.10.0/xen/drivers/pci: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/pci: pci.o
+Seulement dans xen-4.10.0/xen/drivers/pci: .pci.o.d
+Seulement dans xen-4.10.0/xen/drivers/pci: .pci.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: built_in.o
+Seulement dans xen-4.10.0/xen/drivers/video: font_8x14.o
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x14.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x14.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: font_8x16.o
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x16.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x16.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: font_8x8.o
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x8.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .font_8x8.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: lfb.o
+Seulement dans xen-4.10.0/xen/drivers/video: .lfb.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .lfb.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: vesa.o
+Seulement dans xen-4.10.0/xen/drivers/video: .vesa.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .vesa.o.d2
+Seulement dans xen-4.10.0/xen/drivers/video: vga.o
+Seulement dans xen-4.10.0/xen/drivers/video: .vga.o.d
+Seulement dans xen-4.10.0/xen/drivers/video: .vga.o.d2
+Seulement dans xen-4.10.0/xen/include: asm
+Seulement dans xen-4.10.0/xen/include/asm-x86: asm-offsets.h
+Seulement dans xen-4.10.0/xen/include/asm-x86: cpuid-autogen.h
+Seulement dans xen-4.10.0/xen/include/asm-x86/hvm/vmx: hashtab.h
+diff -ru xen-4.10.0-origin/xen/include/asm-x86/hvm/vmx/vmcs.h xen-4.10.0/xen/include/asm-x86/hvm/vmx/vmcs.h
+--- xen-4.10.0-origin/xen/include/asm-x86/hvm/vmx/vmcs.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/asm-x86/hvm/vmx/vmcs.h	2019-09-18 19:17:34.597927000 +0100
+@@ -21,6 +21,7 @@
+ #include <asm/hvm/io.h>
+ #include <irq_vectors.h>
+ 
++
+ extern void vmcs_dump_vcpu(struct vcpu *v);
+ extern void setup_vmcs_dump(void);
+ extern int  vmx_cpu_up_prepare(unsigned int cpu);
+@@ -580,6 +581,104 @@
+ void vmx_domain_flush_pml_buffers(struct domain *d);
+ 
+ void vmx_domain_update_eptp(struct domain *d);
++void get_vtf_cpuinfo(struct xen_sysctl_vtf_getcpuinfo *info); 
++
++/*
++ *For the hashtable
++ */
++#ifndef _SS_HASHTAB_H_
++#define _SS_HASHTAB_H_
++
++#define HASHTAB_MAX_NODES    0xffffffff
++
++struct hashtab {
++    struct hashtab_node **htable;    /* hash table */
++    u32 size;            /* number of slots in hash table */
++    u32 nel;            /* number of elements in hash table */
++    u32 (*hash_value)(struct hashtab *h, const void *key);
++                    /* hash function */
++    int (*keycmp)(struct hashtab *h, const void *key1, const void *key2);
++                    /* key comparison function */
++};
++
++struct hashtab_info {
++    u32 slots_used;
++    u32 max_chain_len;
++};
++
++/*
++ * Creates a new hash table with the specified characteristics.
++ *
++ * Returns NULL if insufficent space is available or
++ * the new hash table otherwise.
++ */
++struct hashtab *hashtab_create(u32 (*hash_value)(struct hashtab *h,
++						 const void *key),
++            int (*keycmp)(struct hashtab *h, const void *key1,
++			  const void *key2), u32 size);
++
++/*
++ * Inserts the specified (key, datum) pair into the specified hash table.
++ *
++ * Returns -ENOMEM on memory allocation error,
++ * -EEXIST if there is already an entry with the same key,
++ * -EINVAL for general errors or
++ * 0 otherwise.
++ */
++int hashtab_insert(struct hashtab *h, void *k, void *d);
++
++/*
++ * Searches for the entry with the specified key in the hash table.
++ *
++ * Returns NULL if no entry has the specified key or
++ * the datum of the entry otherwise.
++ */
++void *hashtab_search(struct hashtab *h, const void *k);
++
++/*
++ * Destroys the specified hash table.
++ */
++void hashtab_destroy(struct hashtab *h);
++
++/*
++ * Applies the specified apply function to (key,datum,args)
++ * for each entry in the specified hash table.
++ *
++ * The order in which the function is applied to the entries
++ * is dependent upon the internal structure of the hash table.
++ *
++ * If apply returns a non-zero status, then hashtab_map will cease
++ * iterating through the hash table and will propagate the error
++ * return to its caller.
++ */
++int hashtab_map(struct hashtab *h,
++                        int (*apply)(void *k, void *d, void *args), void *args);
++
++/* Fill info with some hash table statistics */
++void hashtab_stat(struct hashtab *h, struct hashtab_info *info);
++
++struct data {
++    uint32_t idx;    
++    struct page_info *pg;
++};
++
++//struct data *new_data (uint32_t idx, struct page_info *pg);
++
++unsigned int vtf_hash(struct hashtab *h, const void *key);
++
++int vtf_cmp(struct hashtab *h, const void *key1, const void *key2);
++
++struct hashtab *vtf_hashmap_init(void);
++
++struct hashtab_node {
++    void *key;
++    void *datum;
++    struct hashtab_node *next;
++};
++
++#endif    /* _SS_HASHTAB_H */
++/*
++ */
+ 
+ #endif /* ASM_X86_HVM_VMX_VMCS_H__ */
+ 
+diff -ru xen-4.10.0-origin/xen/include/asm-x86/paging.h xen-4.10.0/xen/include/asm-x86/paging.h
+--- xen-4.10.0-origin/xen/include/asm-x86/paging.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/asm-x86/paging.h	2019-09-18 19:17:34.597927000 +0100
+@@ -171,6 +171,7 @@
+  * TODO2: Abstract out the radix-tree mechanics?
+  */
+ #define LOGDIRTY_NODE_ENTRIES (1 << PAGETABLE_ORDER)
++#define LOGDIRTY_LEAF_LONG_ENTRIES (1 << PAGETABLE_ORDER_LONG)
+ #define L1_LOGDIRTY_IDX(pfn) (pfn_x(pfn) & ((1 << (PAGE_SHIFT + 3)) - 1))
+ #define L2_LOGDIRTY_IDX(pfn) ((pfn_x(pfn) >> (PAGE_SHIFT + 3)) & \
+                               (LOGDIRTY_NODE_ENTRIES-1))
+diff -ru xen-4.10.0-origin/xen/include/asm-x86/shadow.h xen-4.10.0/xen/include/asm-x86/shadow.h
+--- xen-4.10.0-origin/xen/include/asm-x86/shadow.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/asm-x86/shadow.h	2019-09-18 19:17:34.601927000 +0100
+@@ -54,6 +54,28 @@
+  * paging_vcpu_init() in paging.c */
+ void shadow_vcpu_init(struct vcpu *v);
+ 
++//VMWare implementation -- Added from 4.2.0
++/* Remove all mappings of the guest page from the shadows. 
++ * This is called from common code.  It does not flush TLBs. */
++int sh_remove_all_mappings(struct domain *d, mfn_t target_mfn, gfn_t gfn);
++static inline void 
++shadow_drop_references(struct domain *d, struct page_info *p)
++{
++    if ( unlikely(shadow_mode_enabled(d)) )
++        /* See the comment about locking in sh_remove_all_mappings */
++        sh_remove_all_mappings(d, _mfn(page_to_mfn(p)),0);
++}
++
++int sh_remove_all_mappings_vmware(struct vcpu *v, mfn_t target_mfn);
++static inline void 
++shadow_drop_references_vmware(struct domain *d, struct page_info *p)
++{
++    if ( unlikely(shadow_mode_enabled(d)) )
++        /* See the comment about locking in sh_remove_all_mappings */
++        sh_remove_all_mappings_vmware(d->vcpu[0], _mfn(page_to_mfn(p)));
++}
++//
++
+ #ifdef CONFIG_SHADOW_PAGING
+ 
+ /* Enable an arbitrary shadow mode.  Call once at domain creation. */
+diff -ru xen-4.10.0-origin/xen/include/asm-x86/x86_64/page.h xen-4.10.0/xen/include/asm-x86/x86_64/page.h
+--- xen-4.10.0-origin/xen/include/asm-x86/x86_64/page.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/asm-x86/x86_64/page.h	2019-09-18 19:17:34.601927000 +0100
+@@ -11,6 +11,7 @@
+ #define ROOT_PAGETABLE_SHIFT    L4_PAGETABLE_SHIFT
+ 
+ #define PAGETABLE_ORDER         9
++#define PAGETABLE_ORDER_LONG    6
+ #define L1_PAGETABLE_ENTRIES    (1<<PAGETABLE_ORDER)
+ #define L2_PAGETABLE_ENTRIES    (1<<PAGETABLE_ORDER)
+ #define L3_PAGETABLE_ENTRIES    (1<<PAGETABLE_ORDER)
+Seulement dans xen-4.10.0/xen/include: compat
+Seulement dans xen-4.10.0/xen/include: config
+Seulement dans xen-4.10.0/xen/include: generated
+Seulement dans xen-4.10.0/xen/include: headers99.chk
+Seulement dans xen-4.10.0/xen/include: headers.chk
+Seulement dans xen-4.10.0/xen/include: headers++.chk
+diff -ru xen-4.10.0-origin/xen/include/public/domctl.h xen-4.10.0/xen/include/public/domctl.h
+--- xen-4.10.0-origin/xen/include/public/domctl.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/domctl.h	2019-09-23 09:49:45.999245000 +0100
+@@ -1105,6 +1105,36 @@
+                                  */
+ };
+ 
++typedef enum { 
++    False = 0,
++    True,
++} boolean_t;
++
++/*struct  xen_domctl_vtf_action { 
++    uint32_t action;
++    #define XEN_DOMCTL_vtf_action_enable     1
++    #define XEN_DOMCTL_vtf_action_disable    2
++    uint32_t pid;
++};
++typedef struct xen_domctl_vtf_action xen_domctl_vtf_action_t;
++DEFINE_XEN_GUEST_HANDLE(xen_domctl_vtf_action_t);
++
++struct xen_domctl_vtf_pids {
++    uint32_t *list;
++};
++typedef struct xen_domctl_vtf_pids xen_domctl_vtf_pids_t;*/
++
++struct xen_domctl_vtf {
++    //boolean_t check;
++    uint32_t hw;
++    #define XEN_DOMCTL_vtf_hw_PML        1
++    #define XEN_DOMCTL_vtf_hw_EPT        2  
++    uint32_t pids[25];
++   // xen_domctl_vtf_action_t cmd;  
++};
++typedef struct xen_domctl_vtf xen_domctl_vtf_t;
++DEFINE_XEN_GUEST_HANDLE(xen_domctl_vtf_t);
++
+ struct xen_domctl {
+     uint32_t cmd;
+ #define XEN_DOMCTL_createdomain                   1
+@@ -1184,6 +1214,7 @@
+ #define XEN_DOMCTL_soft_reset                    79
+ #define XEN_DOMCTL_set_gnttab_limits             80
+ #define XEN_DOMCTL_vuart_op                      81
++#define XEN_DOMCTL_vtf                           82
+ #define XEN_DOMCTL_gdbsx_guestmemio            1000
+ #define XEN_DOMCTL_gdbsx_pausevcpu             1001
+ #define XEN_DOMCTL_gdbsx_unpausevcpu           1002
+@@ -1248,6 +1279,7 @@
+         struct xen_domctl_psr_cat_op        psr_cat_op;
+         struct xen_domctl_set_gnttab_limits set_gnttab_limits;
+         struct xen_domctl_vuart_op          vuart_op;
++        struct xen_domctl_vtf               vtf;
+         uint8_t                             pad[128];
+     } u;
+ };
+diff -ru xen-4.10.0-origin/xen/include/public/hvm/hvm_op.h xen-4.10.0/xen/include/public/hvm/hvm_op.h
+--- xen-4.10.0-origin/xen/include/public/hvm/hvm_op.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/hvm/hvm_op.h	2019-09-18 19:17:34.601927000 +0100
+@@ -170,7 +170,7 @@
+  * the pointer pair gets read atomically:
+  */
+ #define HVM_IOREQSRV_BUFIOREQ_ATOMIC 2
+-
++ 
+ #endif /* defined(__XEN__) || defined(__XEN_TOOLS__) */
+ 
+ #if defined(__i386__) || defined(__x86_64__)
+@@ -197,6 +197,9 @@
+ /* HVMOP_altp2m: perform altp2m state operations */
+ #define HVMOP_altp2m 25
+ 
++/*vtf - HVMOP_vtf_context_switch*/
++/*#define HVMOP_vtf_context_switch 26*/
++
+ #define HVMOP_ALTP2M_INTERFACE_VERSION 0x00000001
+ 
+ struct xen_hvm_altp2m_domain_state {
+diff -ru xen-4.10.0-origin/xen/include/public/memory.h xen-4.10.0/xen/include/public/memory.h
+--- xen-4.10.0-origin/xen/include/public/memory.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/memory.h	2020-02-10 20:43:50.533508000 +0100
+@@ -1,8 +1,8 @@
+ /******************************************************************************
+  * memory.h
+- * 
++ *
+  * Memory reservation and information.
+- * 
++ *
+  * Permission is hereby granted, free of charge, to any person obtaining a copy
+  * of this software and associated documentation files (the "Software"), to
+  * deal in the Software without restriction, including without limitation the
+@@ -41,9 +41,9 @@
+ 
+ #if __XEN_INTERFACE_VERSION__ >= 0x00030209
+ /*
+- * Maximum # bits addressable by the user of the allocated region (e.g., I/O 
+- * devices often have a 32-bit limitation even in 64-bit systems). If zero 
+- * then the user has no addressing restriction. This field is not used by 
++ * Maximum # bits addressable by the user of the allocated region (e.g., I/O
++ * devices often have a 32-bit limitation even in 64-bit systems). If zero
++ * then the user has no addressing restriction. This field is not used by
+  * XENMEM_decrease_reservation.
+  */
+ #define XENMEMF_address_bits(x)     (x)
+@@ -117,7 +117,7 @@
+      * [IN/OUT] Details of new memory extents.
+      * We require that:
+      *  1. @in.domid == @out.domid
+-     *  2. @in.nr_extents  << @in.extent_order == 
++     *  2. @in.nr_extents  << @in.extent_order ==
+      *     @out.nr_extents << @out.extent_order
+      *  3. @in.extent_start and @out.extent_start lists must not overlap
+      *  4. @out.extent_start lists GPFN bases to be populated
+@@ -229,6 +229,8 @@
+                                       memory attribute. */
+ /* ` } */
+ 
++#define XENMAPSPACE_pml_shared_info 30
++
+ /*
+  * Sets the GPFN at which a particular page appears in the specified guest's
+  * pseudophysical address space.
+@@ -382,7 +384,7 @@
+ 
+ /*
+  * Get the number of MFNs saved through memory sharing.
+- * The call never fails. 
++ * The call never fails.
+  */
+ #define XENMEM_get_sharing_freed_pages    18
+ #define XENMEM_get_sharing_shared_pages   19
+@@ -488,7 +490,7 @@
+ 
+ /* The following allows sharing of grant refs. This is useful
+  * for sharing utilities sitting as "filters" in IO backends
+- * (e.g. memshr + blktap(2)). The IO backend is only exposed 
++ * (e.g. memshr + blktap(2)). The IO backend is only exposed
+  * to grant references, and this allows sharing of the grefs */
+ #define XENMEM_SHARING_OP_FIELD_IS_GREF_FLAG   (xen_mk_ullong(1) << 62)
+ 
+diff -ru xen-4.10.0-origin/xen/include/public/sysctl.h xen-4.10.0/xen/include/public/sysctl.h
+--- xen-4.10.0-origin/xen/include/public/sysctl.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/sysctl.h	2019-09-18 19:17:34.605928000 +0100
+@@ -65,7 +65,7 @@
+     /* IN variables */
+ #define XEN_SYSCTL_TBUFOP_get_info     0
+ #define XEN_SYSCTL_TBUFOP_set_cpu_mask 1
+-#define XEN_SYSCTL_TBUFOP_set_evt_mask 2
++#define XEN_SYSCTL_TBUFOP_set_evt_mask 2 
+ #define XEN_SYSCTL_TBUFOP_set_size     3
+ #define XEN_SYSCTL_TBUFOP_enable       4
+ #define XEN_SYSCTL_TBUFOP_disable      5
+@@ -78,6 +78,11 @@
+     uint32_t size;  /* Also an IN variable! */
+ };
+ 
++/*typedef enum {
++    False = 0,
++    True,
++} boolean_t;*/
++
+ /*
+  * Get physical information about the host machine
+  */
+@@ -89,6 +94,7 @@
+ #define _XEN_SYSCTL_PHYSCAP_hvm_directio 1
+ #define XEN_SYSCTL_PHYSCAP_hvm_directio  (1u<<_XEN_SYSCTL_PHYSCAP_hvm_directio)
+ struct xen_sysctl_physinfo {
++    boolean_t vtf_cmd;
+     uint32_t threads_per_core;
+     uint32_t cores_per_socket;
+     uint32_t nr_cpus;     /* # CPUs currently online */
+@@ -1044,6 +1050,30 @@
+     uint16_t size;                          /* IN: size of parameters. */
+     uint16_t pad[3];                        /* IN: MUST be zero. */
+ };
++ 
++struct xen_sysctl_vtf_getcpuinfo {
++    uint32_t ept:1;
++    uint32_t pml:1;
++};
++typedef struct xen_sysctl_vtf_getcpuinfo xen_sysctl_vtf_getcpuinfo_t; 
++DEFINE_XEN_GUEST_HANDLE(xen_sysctl_vtf_getcpuinfo_t);
++
++struct xen_sysctl_vtf_action { 
++    uint32_t action;
++    #define XEN_SYSCTL_vtf_action_list       1
++    #define XEN_SYSCTL_vtf_action_help       2
++    uint32_t pid;
++};
++typedef struct xen_sysctl_vtf_action xen_sysctl_vtf_action_t;
++DEFINE_XEN_GUEST_HANDLE(xen_sysctl_vtf_action_t);
++
++struct xen_sysctl_vtf {
++    boolean_t check; 
++    xen_sysctl_vtf_action_t cmd;  
++    XEN_GUEST_HANDLE_64(xen_sysctl_vtf_getcpuinfo_t) buffer;
++};
++//typedef struct xen_sysctl_vtf xen_sysctl_vtf_t;
++//DEFINE_XEN_GUEST_HANDLE(xen_sysctl_vtf_t);
+ 
+ struct xen_sysctl {
+     uint32_t cmd;
+@@ -1074,6 +1104,7 @@
+ #define XEN_SYSCTL_get_cpu_featureset            26
+ #define XEN_SYSCTL_livepatch_op                  27
+ #define XEN_SYSCTL_set_parameter                 28
++#define XEN_SYSCTL_vtf                           29
+     uint32_t interface_version; /* XEN_SYSCTL_INTERFACE_VERSION */
+     union {
+         struct xen_sysctl_readconsole       readconsole;
+@@ -1103,6 +1134,7 @@
+         struct xen_sysctl_cpu_featureset    cpu_featureset;
+         struct xen_sysctl_livepatch_op      livepatch;
+         struct xen_sysctl_set_parameter     set_parameter;
++        struct xen_sysctl_vtf               vtf;
+         uint8_t                             pad[128];
+     } u;
+ };
+diff -ru xen-4.10.0-origin/xen/include/public/version.h xen-4.10.0/xen/include/public/version.h
+--- xen-4.10.0-origin/xen/include/public/version.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/version.h	2019-09-18 19:17:34.605928000 +0100
+@@ -77,6 +77,10 @@
+ 
+ /* arg == NULL; returns host memory page size. */
+ #define XENVER_pagesize 7
++struct xen_vtf_signal {
++    unsigned int pid_signal; 
++};
++typedef struct xen_vtf_signal xen_vtf_signal_t;
+ 
+ /* arg == xen_domain_handle_t.
+  *
+diff -ru xen-4.10.0-origin/xen/include/public/xen.h xen-4.10.0/xen/include/public/xen.h
+--- xen-4.10.0-origin/xen/include/public/xen.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/public/xen.h	2020-02-10 21:58:30.645630000 +0100
+@@ -1,8 +1,8 @@
+ /******************************************************************************
+  * xen.h
+- * 
++ *
+  * Guest OS interface to Xen.
+- * 
++ *
+  * Permission is hereby granted, free of charge, to any person obtaining a copy
+  * of this software and associated documentation files (the "Software"), to
+  * deal in the Software without restriction, including without limitation the
+@@ -157,11 +157,11 @@
+ #define __HYPERVISOR_dom0_op __HYPERVISOR_platform_op
+ #endif
+ 
+-/* 
++/*
+  * VIRTUAL INTERRUPTS
+- * 
++ *
+  * Virtual interrupts that a guest OS may receive from Xen.
+- * 
++ *
+  * In the side comments, 'V.' denotes a per-VCPU VIRQ while 'G.' denotes a
+  * global VIRQ. The former can be bound once per VCPU and cannot be re-bound.
+  * The latter can be allocated only once per guest: they must initially be
+@@ -181,6 +181,7 @@
+ #define VIRQ_XC_RESERVED 11 /* G. Reserved for XenClient                     */
+ #define VIRQ_ENOMEM     12 /* G. (DOM0) Low on heap memory       */
+ #define VIRQ_XENPMU     13 /* V.  PMC interrupt                              */
++#define VIRQ_PML_FULL   14 /* V.  PML FULL interrupt                         */
+ 
+ /* Architecture-specific VIRQ definitions. */
+ #define VIRQ_ARCH_0    16
+@@ -211,7 +212,7 @@
+  *                     (x) encodes the PFD as follows:
+  *                     x == 0 => PFD == DOMID_SELF
+  *                     x != 0 => PFD == x - 1
+- * 
++ *
+  * Sub-commands: ptr[1:0] specifies the appropriate MMU_* command.
+  * -------------
+  * ptr[1:0] == MMU_NORMAL_PT_UPDATE:
+@@ -257,13 +258,13 @@
+  * To deallocate the pages, the operations are the reverse of the steps
+  * mentioned above. The argument is MMUEXT_UNPIN_TABLE for all levels and the
+  * pagetable MUST not be in use (meaning that the cr3 is not set to it).
+- * 
++ *
+  * ptr[1:0] == MMU_MACHPHYS_UPDATE:
+  * Updates an entry in the machine->pseudo-physical mapping table.
+  * ptr[:2]  -- Machine address within the frame whose mapping to modify.
+  *             The frame must belong to the FD, if one is specified.
+  * val      -- Value to write into the mapping entry.
+- * 
++ *
+  * ptr[1:0] == MMU_PT_UPDATE_PRESERVE_AD:
+  * As MMU_NORMAL_PT_UPDATE above, but A/D bits currently in the PTE are ORed
+  * with those in @val.
+@@ -655,7 +656,7 @@
+ struct vcpu_info {
+     /*
+      * 'evtchn_upcall_pending' is written non-zero by Xen to indicate
+-     * a pending notification for a particular VCPU. It is then cleared 
++     * a pending notification for a particular VCPU. It is then cleared
+      * by the guest OS /before/ checking for pending work, thus avoiding
+      * a set-and-check race. Note that the mask is only accessed by Xen
+      * on the CPU that is currently hosting the VCPU. This means that the
+@@ -692,6 +693,13 @@
+ typedef struct vcpu_info vcpu_info_t;
+ #endif
+ 
++struct vtf_info {
++	uint32_t pml_page_order;
++	uint32_t nr_pml_entries;
++	unsigned long *pml;
++};
++typedef struct vtf_info vtf_info_t;
++
+ /*
+  * `incontents 200 startofday_shared Start-of-day shared data structure
+  * Xen/kernel shared data -- pointer provided in start_info.
+@@ -718,7 +726,7 @@
+      *  3. Virtual interrupts ('events'). A domain can bind an event-channel
+      *     port to a virtual interrupt source, such as the virtual-timer
+      *     device or the emergency console.
+-     * 
++     *
+      * Event channels are addressed by a "port index". Each channel is
+      * associated with two bits of information:
+      *  1. PENDING -- notifies the domain that there is a pending notification
+@@ -729,7 +737,7 @@
+      *     becomes pending while the channel is masked then the 'edge' is lost
+      *     (i.e., when the channel is unmasked, the guest must manually handle
+      *     pending notifications as no upcall will be scheduled by Xen).
+-     * 
++     *
+      * To expedite scanning of pending notifications, any 0->1 pending
+      * transition on an unmasked channel causes a corresponding bit in a
+      * per-vcpu selector word to be set. Each bit in the selector covers a
+Seulement dans xen-4.10.0/xen/include/public: xen.h.orig
+Seulement dans xen-4.10.0/xen/include/xen: compile.h
+diff -ru xen-4.10.0-origin/xen/include/xen/sched.h xen-4.10.0/xen/include/xen/sched.h
+--- xen-4.10.0-origin/xen/include/xen/sched.h	2017-12-13 12:37:59.000000000 +0100
++++ xen-4.10.0/xen/include/xen/sched.h	2020-02-10 20:43:50.537511000 +0100
+@@ -302,15 +302,34 @@
+     guest_type_pv, guest_type_hvm
+ };
+ 
++//VMWare implementation
++/*working set struct*/
++struct working_set
++{
++   unsigned int  inv_pages[100];//100-vmware default, 131072-to work on every pages for 512Mo
++   unsigned int  test_inv[100];
++   //Here we invalidate almost all memory pages
++   //unsigned int  inv_pages[300000];//100-vmware default, 131072-to work on every pages for 512Mo
++   //unsigned int  test_inv[300000];
++   unsigned int  tot_access;
++   struct timer *timer;
++};
++//
++
+ struct domain
+ {
+     domid_t          domain_id;
+ 
+     unsigned int     max_vcpus;
++    unsigned int     vtf_pids[25];
++    bool     is_vtf;
+     struct vcpu    **vcpu;
+ 
+     shared_info_t   *shared_info;     /* shared data area */
+ 
++    spinlock_t vtf_pml_lock;
++    vtf_info_t vtf_info;
++
+     spinlock_t       domain_lock;
+ 
+     spinlock_t       page_alloc_lock; /* protects all the following fields  */
+@@ -322,7 +341,11 @@
+     unsigned int     max_pages;       /* maximum value for tot_pages        */
+     atomic_t         shr_pages;       /* number of shared pages             */
+     atomic_t         paged_pages;     /* number of paged-out pages          */
+-
++     
++    //VMWare implementation
++    /*working set*/
++    struct working_set *ws;
++    
+     /* Scheduling. */
+     void            *sched_priv;    /* scheduler-specific data */
+     struct cpupool  *cpupool;
+Seulement dans xen-4.10.0/xen/include/xen: sched.h.orig
+Seulement dans xen-4.10.0/xen/tools/kconfig: conf
+Seulement dans xen-4.10.0/xen/tools/kconfig: conf.o
+Seulement dans xen-4.10.0/xen/tools/kconfig: .conf.o.d
+Seulement dans xen-4.10.0/xen/tools/kconfig: zconf.hash.c
+Seulement dans xen-4.10.0/xen/tools/kconfig: zconf.lex.c
+Seulement dans xen-4.10.0/xen/tools/kconfig: zconf.tab.c
+Seulement dans xen-4.10.0/xen/tools/kconfig: zconf.tab.o
+Seulement dans xen-4.10.0/xen/tools/kconfig: .zconf.tab.o.d
+Seulement dans xen-4.10.0/xen/tools: symbols
+Seulement dans xen-4.10.0/xen: xen
+Seulement dans xen-4.10.0/xen: xen.efi
+Seulement dans xen-4.10.0/xen: ..xen.efi.0r.o.d
+Seulement dans xen-4.10.0/xen: ..xen.efi.0r.o.d2
+Seulement dans xen-4.10.0/xen: ..xen.efi.0s.o.d
+Seulement dans xen-4.10.0/xen: ..xen.efi.0s.o.d2
+Seulement dans xen-4.10.0/xen: ..xen.efi.1r.o.d
+Seulement dans xen-4.10.0/xen: ..xen.efi.1r.o.d2
+Seulement dans xen-4.10.0/xen: ..xen.efi.1s.o.d
+Seulement dans xen-4.10.0/xen: ..xen.efi.1s.o.d2
+Seulement dans xen-4.10.0/xen: xen.efi.map
+Seulement dans xen-4.10.0/xen: xen.gz
+Seulement dans xen-4.10.0/xen: xen-syms
+Seulement dans xen-4.10.0/xen: ..xen-syms.0.o.d
+Seulement dans xen-4.10.0/xen: ..xen-syms.0.o.d2
+Seulement dans xen-4.10.0/xen: ..xen-syms.1.o.d
+Seulement dans xen-4.10.0/xen: ..xen-syms.1.o.d2
+Seulement dans xen-4.10.0/xen: xen-syms.map
+Seulement dans xen-4.10.0/xen/xsm: built_in.o
+Seulement dans xen-4.10.0/xen/xsm: xsm_core.o
+Seulement dans xen-4.10.0/xen/xsm: .xsm_core.o.d
+Seulement dans xen-4.10.0/xen/xsm: .xsm_core.o.d2

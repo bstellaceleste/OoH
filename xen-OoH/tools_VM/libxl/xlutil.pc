@@ -1,0 +1,10 @@
+prefix=/usr/local
+includedir=/usr/local/include
+libdir=/usr/local/lib
+
+Name: Xlutil
+Description: The xl utility library for Xen hypervisor
+Version: 4.10.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lxlutil
+Requires.private: xenlight

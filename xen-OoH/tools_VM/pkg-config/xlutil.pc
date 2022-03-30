@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/libxl/../..
+includedir=/home/stella/PML-Xen10/tools/libxl
+libdir=/home/stella/PML-Xen10/tools/libxl
+
+Name: Xlutil
+Description: The xl utility library for Xen hypervisor
+Version: 4.10.0
+Cflags: -I${includedir}
+Libs: -Wl,-rpath-link=${libdir} -lxlutil
+Requires.private: xenlight

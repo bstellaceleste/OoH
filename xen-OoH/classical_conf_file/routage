@@ -1,0 +1,29 @@
+Dans le dom0
+brctl addbr xenbr0
+ifconfig xenbr0 10.0.0.1
+brctl addif xenbr0 vifx.x
+
+Dans la VM
+ifconfig eth0 10.0.0.3
+#configuration de la passerelle par défaut
+route add default gw 10.0.0.1
+#configuration du serveur dns
+echo 'nameserver 8.8.8.8' > /etc/resolv.conf
+
+Dans le dom0
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables --flush
+iptables -L
+#doit être vide
+iptables -t nat --flush
+iptables -t nat -L
+#doit être vide
+
+iptables -A FORWARD -o wlp2s0 -i xenbr0 -s 10.0.0.0/24 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -t nat -A POSTROUTING -o wlp2s0 -j MASQUERADE
+echo 1 > /proc/sys/net/ipv4/ip_forward
+#/etc/init.d/procps restart
+
+
+voir https://wiki.archlinux.fr/Partage_de_connexion

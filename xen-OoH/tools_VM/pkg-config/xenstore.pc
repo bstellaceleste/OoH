@@ -1,0 +1,10 @@
+prefix=/home/stella/PML-Xen10/tools/xenstore/../..
+includedir=/home/stella/PML-Xen10/tools/xenstore/../../tools/xenstore/include
+libdir=/home/stella/PML-Xen10/tools/xenstore
+
+Name: Xenstore
+Description: The Xenstore library for Xen hypervisor
+Version: 3.0.3
+Cflags: -I${includedir} -I/home/stella/PML-Xen10/tools/xenstore/../../tools/include
+Libs: -Wl,-rpath-link=${libdir} -lxenstore
+Requires.private: xenevtchn,xencontrol,xengnttab,xentoolcore

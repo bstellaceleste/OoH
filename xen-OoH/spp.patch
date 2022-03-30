@@ -1,0 +1,850 @@
+diff --git ./xen/arch/x86/hvm/hvm.c ./xen/arch/x86/hvm/hvm.c
+index afc4620..a7ced32 100644
+--- ./xen/arch/x86/hvm/hvm.c
++++ ./xen/arch/x86/hvm/hvm.c
+@@ -1777,6 +1777,11 @@ int hvm_hap_nested_page_fault(paddr_t gpa, unsigned long gla,
+         case p2m_access_rwx:
+             violation = 0;
+             break;
++        case p2m_access_spp:
++            printk("SPP: spp write protect: acc mode:%d\n", npfec.write_access);
++            violation = npfec.write_access;
++            rc = HVM_SPP_WRITE_PROTECTED;
++            goto out_put_gfn;
+         }
+ 
+         if ( violation )
+diff --git ./xen/arch/x86/hvm/vmx/vmx.c ./xen/arch/x86/hvm/vmx/vmx.c
+index a4c24bb..0481ffd 100644
+--- ./xen/arch/x86/hvm/vmx/vmx.c
++++ ./xen/arch/x86/hvm/vmx/vmx.c
+@@ -3295,6 +3295,9 @@ static void ept_handle_violation(ept_qual_t q, paddr_t gpa)
+                         nestedhvm_paging_mode_hap(current ) )
+             __vmwrite(EPT_POINTER, get_shadow_eptp(current));
+         return;
++    case HVM_SPP_WRITE_PROTECTED:
++        update_guest_eip();
++        return;
+     case -1:        // This vioaltion should be injected to L1 VMM
+         vcpu_nestedhvm(current).nv_vmexit_pending = 1;
+         return;
+diff --git ./xen/arch/x86/mm/p2m-ept.c ./xen/arch/x86/mm/p2m-ept.c
+index c9dc29c..065beb9 100644
+--- ./xen/arch/x86/mm/p2m-ept.c
++++ ./xen/arch/x86/mm/p2m-ept.c
+@@ -214,6 +214,7 @@ static void ept_p2m_type_to_flags(struct p2m_domain *p2m, ept_entry_t *entry,
+             entry->x = 0;
+             break;           
+         case p2m_access_rwx:
++        case p2m_access_spp:
+             break;
+     }
+     
+@@ -756,6 +757,7 @@ ept_spp_update_wp(struct p2m_domain *p2m, unsigned long gfn)
+     new_entry = atomic_read_ept_entry(ept_entry);
+     new_entry.spp = 1;
+     new_entry.w = 0;
++    new_entry.access = p2m_access_spp;
+     write_atomic(&(ept_entry->epte), new_entry.epte);
+ 
+     ept_sync_domain(p2m);
+diff --git ./xen/include/asm-x86/hvm/hvm.h ./xen/include/asm-x86/hvm/hvm.h
+index b687e03..30c6775 100644
+--- ./xen/include/asm-x86/hvm/hvm.h
++++ ./xen/include/asm-x86/hvm/hvm.h
+@@ -80,6 +80,8 @@ enum hvm_intblk {
+ #define HVM_EVENT_VECTOR_UNSET    (-1)
+ #define HVM_EVENT_VECTOR_UPDATING (-2)
+ 
++#define HVM_SPP_WRITE_PROTECTED 2
++
+ /*
+  * The hardware virtual machine (HVM) interface abstracts away from the
+  * x86/x86_64 CPU virtualization assist specifics. Currently this interface
+diff --git ./xen/include/xen/mem_access.h ./xen/include/xen/mem_access.h
+index 28eb70c..b5811dd 100644
+--- ./xen/include/xen/mem_access.h
++++ ./xen/include/xen/mem_access.h
+@@ -54,6 +54,7 @@ typedef enum {
+     p2m_access_n2rwx = 9, /* Special: page goes from N to RWX on access, *
+                            * generates an event but does not pause the
+                            * vcpu */
++    p2m_access_spp = 0x0d,
+ 
+     /* NOTE: Assumed to be only 4 bits right now on x86. */
+ } p2m_access_t;
+
+diff --git ./tools/libxc/include/xenctrl.h ./tools/libxc/include/xenctrl.h
+index bde8313..a13f2c7 100644
+--- ./tools/libxc/include/xenctrl.h
++++ ./tools/libxc/include/xenctrl.h
+@@ -1956,6 +1956,8 @@ int xc_mem_paging_evict(xc_interface *xch, domid_t domain_id, uint64_t gfn);
+ int xc_mem_paging_prep(xc_interface *xch, domid_t domain_id, uint64_t gfn);
+ int xc_mem_paging_load(xc_interface *xch, domid_t domain_id,
+                        uint64_t gfn, void *buffer);
++int xc_mem_set_subpage(xc_interface *handle, domid_t domid,
++                             xen_pfn_t gfn, uint32_t access);
+ 
+ /** 
+  * Access tracking operations.
+diff --git ./tools/libxc/xc_mem_paging.c ./tools/libxc/xc_mem_paging.c
+index 28611f4..36f7949 100644
+--- ./tools/libxc/xc_mem_paging.c
++++ ./tools/libxc/xc_mem_paging.c
+@@ -116,6 +116,26 @@ int xc_mem_paging_load(xc_interface *xch, domid_t domain_id,
+     return rc;
+ }
+ 
++int xc_mem_set_subpage(xc_interface *handle, domid_t domid,
++                             xen_pfn_t gfn, uint32_t access)
++{
++    int rc;
++    DECLARE_HYPERCALL_BUFFER(xen_hvm_subpage_t, arg);
++
++    arg = xc_hypercall_buffer_alloc(handle, arg, sizeof(*arg));
++    if ( arg == NULL )
++        return -1;
++
++    arg->domid = domid;
++    arg->access_map = access;
++    arg->gfn = gfn;
++
++    rc = xencall2(handle->xcall, __HYPERVISOR_hvm_op, HVMOP_set_subpage,
++                 HYPERCALL_BUFFER_AS_ARG(arg));
++
++    xc_hypercall_buffer_free(handle, arg);
++    return rc;
++}
+ 
+ /*
+  * Local variables:
+
+diff --git ./xen/arch/x86/mm/mem_access.c ./xen/arch/x86/mm/mem_access.c
+index 5adaf6d..a471c74 100644
+--- ./xen/arch/x86/mm/mem_access.c
++++ ./xen/arch/x86/mm/mem_access.c
+@@ -466,6 +466,30 @@ int p2m_get_mem_access(struct domain *d, gfn_t gfn, xenmem_access_t *access)
+     return _p2m_get_mem_access(p2m, gfn, access);
+ }
+ 
++int p2m_set_mem_spp_wp(struct domain *d, gfn_t gfn)
++{
++    struct p2m_domain *p2m = p2m_get_hostp2m(d);
++    mfn_t mfn;
++    p2m_access_t old_a;
++    int rc = -1;
++    p2m_type_t t;
++    unsigned long gfn_l = gfn_x(gfn);
++
++    p2m_lock(p2m);
++    mfn = p2m->get_entry(p2m, gfn_l, &t, &old_a, 0, NULL, NULL);
++    if( mfn_eq(mfn, INVALID_MFN) )
++    {
++        rc = -1;
++        goto unlock_exit;
++    }
++    if ( p2m->update_ept_spp_wp )
++        rc = p2m->update_ept_spp_wp(p2m, gfn_l);
++
++unlock_exit:
++    p2m_unlock(p2m);
++    return rc;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff --git ./xen/arch/x86/mm/p2m-ept.c ./xen/arch/x86/mm/p2m-ept.c
+index 8d9da92..c249286 100644
+--- ./xen/arch/x86/mm/p2m-ept.c
++++ ./xen/arch/x86/mm/p2m-ept.c
+@@ -667,6 +667,48 @@ bool_t ept_handle_misconfig(uint64_t gpa)
+     return spurious ? (rc >= 0) : (rc > 0);
+ }
+ 
++static int
++ept_spp_update_wp(struct p2m_domain *p2m, unsigned long gfn)
++{
++    ept_entry_t *table, *ept_entry = NULL;
++    unsigned long gfn_remainder = gfn;
++    ept_entry_t new_entry = { .epte = 0 };
++    struct ept_data *ept = &p2m->ept;
++    unsigned int i;
++    int ret, rc;
++
++    table = map_domain_page(_mfn(pagetable_get_pfn(p2m_get_pagetable(p2m))));
++
++    ret = GUEST_TABLE_MAP_FAILED;
++    for ( i = ept->wl; i > 0; i-- )
++    {
++        ret = ept_next_level(p2m, 0, &table, &gfn_remainder, i);
++        if ( ret != GUEST_TABLE_NORMAL_PAGE )
++        {
++            rc = -ENOENT;
++            goto out;
++        }
++    }
++
++    ept_entry = table + (gfn_remainder >> (i * EPT_TABLE_ORDER));
++    if ( !is_epte_present(ept_entry) )
++    {
++        rc = -ENOENT;
++        goto out;
++    }
++
++    new_entry = atomic_read_ept_entry(ept_entry);
++    new_entry.spp = 1;
++    new_entry.w = 0;
++    write_atomic(&(ept_entry->epte), new_entry.epte);
++
++    ept_sync_domain(p2m);
++    rc = 0;
++out:
++    unmap_domain_page(table);
++    return rc;
++}
++
+ /*
+  * ept_set_entry() computes 'need_modify_vtd_table' for itself,
+  * by observing whether any gfn->mfn translations are modified.
+@@ -1264,6 +1306,11 @@ int ept_p2m_init(struct p2m_domain *p2m)
+         p2m->flush_hardware_cached_dirty = ept_flush_pml_buffers;
+     }
+ 
++    if ( cpu_has_vmx_ept_spp )
++    {
++        p2m->update_ept_spp_wp = ept_spp_update_wp;
++    }
++
+     if ( !zalloc_cpumask_var(&ept->invalidate) )
+         return -ENOMEM;
+ 
+diff --git ./xen/include/asm-x86/p2m.h ./xen/include/asm-x86/p2m.h
+index 0561643..adbc1c6 100644
+--- ./xen/include/asm-x86/p2m.h
++++ ./xen/include/asm-x86/p2m.h
+@@ -266,6 +266,8 @@ struct p2m_domain {
+                                           unsigned long gfn, l1_pgentry_t *p,
+                                           l1_pgentry_t new, unsigned int level);
+     long               (*audit_p2m)(struct p2m_domain *p2m);
++    int                (*update_ept_spp_wp)(struct p2m_domain *p2m,
++                                 unsigned long gfn);
+ 
+     /*
+      * P2M updates may require TLBs to be flushed (invalidated).
+
+diff --git ./xen/arch/x86/hvm/hvm.c ./xen/arch/x86/hvm/hvm.c
+index 54cd916..afc4620 100644
+--- ./xen/arch/x86/hvm/hvm.c
++++ ./xen/arch/x86/hvm/hvm.c
+@@ -4696,9 +4696,17 @@ long do_hvm_op(unsigned long op, XEN_GUEST_HANDLE_PARAM(void) arg)
+ 
+     case HVMOP_set_subpage: {
+         xen_hvm_subpage_t subpage;
++        struct domain *d;
+ 
+         if ( copy_from_guest(&subpage, arg, 1 ) )
+             return -EFAULT;
++
++        d = rcu_lock_domain_by_any_id(subpage.domid);
++        if ( d == NULL )
++            return -ESRCH;
++
++        rc = p2m_set_subpage(d, (_gfn)(subpage.gfn), subpage.access_map);
++        rcu_unlock_domain(d);
+         break;
+     }
+ 
+diff --git ./xen/arch/x86/mm/mem_access.c ./xen/arch/x86/mm/mem_access.c
+index 1b97469..fdedc4a 100644
+--- ./xen/arch/x86/mm/mem_access.c
++++ ./xen/arch/x86/mm/mem_access.c
+@@ -525,6 +525,21 @@ int p2m_set_spp_page_st(struct domain *d, gfn_t gfn, uint32_t access_map)
+     return ret;
+ }
+ 
++int p2m_set_subpage(struct domain *d, gfn_t gfn, uint32_t access_map)
++{
++    int ret;
++    ret = p2m_set_mem_spp_wp(d, gfn);
++    if ( ret < 0 )
++    {
++        printk("SPP: Set subpage ept wp failed!! %x\n", ret);
++        return ret;
++    }
++    ret = p2m_set_spp_page_st(d, gfn, access_map);
++    if ( ret < 0 )
++        printk("SPP: Set subpage table failed!! %x\n", ret);
++    return ret;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff --git ./xen/include/xen/mem_access.h ./xen/include/xen/mem_access.h
+index 5ab34c1..28eb70c 100644
+--- ./xen/include/xen/mem_access.h
++++ ./xen/include/xen/mem_access.h
+@@ -78,6 +78,8 @@ long p2m_set_mem_access_multi(struct domain *d,
+  */
+ int p2m_get_mem_access(struct domain *d, gfn_t gfn, xenmem_access_t *access);
+ 
++int p2m_set_subpage(struct domain *d, gfn_t gfn, uint32_t access_map);
++
+ #ifdef CONFIG_HAS_MEM_ACCESS
+ int mem_access_memop(unsigned long cmd,
+                      XEN_GUEST_HANDLE_PARAM(xen_mem_access_op_t) arg);
+
+diff --git ./xen/arch/x86/hvm/hvm.c ./xen/arch/x86/hvm/hvm.c
+index 0b1aba7..54cd916 100644
+--- ./xen/arch/x86/hvm/hvm.c
++++ ./xen/arch/x86/hvm/hvm.c
+@@ -4694,6 +4694,14 @@ long do_hvm_op(unsigned long op, XEN_GUEST_HANDLE_PARAM(void) arg)
+         rc = do_altp2m_op(arg);
+         break;
+ 
++    case HVMOP_set_subpage: {
++        xen_hvm_subpage_t subpage;
++
++        if ( copy_from_guest(&subpage, arg, 1 ) )
++            return -EFAULT;
++        break;
++    }
++
+     default:
+     {
+         gdprintk(XENLOG_DEBUG, "Bad HVM op %ld.\n", op);
+diff --git ./xen/include/public/hvm/hvm_op.h ./xen/include/public/hvm/hvm_op.h
+index 0bdafdf..0fa5b88 100644
+--- ./xen/include/public/hvm/hvm_op.h
++++ ./xen/include/public/hvm/hvm_op.h
+@@ -205,6 +205,15 @@ struct xen_hvm_altp2m_domain_state {
+ };
+ typedef struct xen_hvm_altp2m_domain_state xen_hvm_altp2m_domain_state_t;
+ DEFINE_XEN_GUEST_HANDLE(xen_hvm_altp2m_domain_state_t);
++#define HVMOP_set_subpage          26
++struct xen_hvm_subpage {
++    domid_t  domid;
++    uint32_t access_map;
++    uint64_t gfn;
++};
++typedef struct xen_hvm_subpage xen_hvm_subpage_t;
++DEFINE_XEN_GUEST_HANDLE(xen_hvm_subpage_t);
++
+ 
+ struct xen_hvm_altp2m_vcpu_enable_notify {
+     uint32_t vcpu_id;
+
+diff --git ./xen/include/asm-x86/hvm/vmx/vmx.h ./xen/include/asm-x86/hvm/vmx/vmx.h
+index 35aada6..18383b8 100644
+--- ./xen/include/asm-x86/hvm/vmx/vmx.h
++++ ./xen/include/asm-x86/hvm/vmx/vmx.h
+@@ -42,8 +42,9 @@ typedef union {
+         snp         :   1,  /* bit 11 - VT-d snoop control in shared
+                                EPT/VT-d usage */
+         mfn         :   40, /* bits 51:12 - Machine physical frame number */
+-        sa_p2mt     :   6,  /* bits 57:52 - Software available 2 */
+-        access      :   4,  /* bits 61:58 - p2m_access_t */
++        sa_p2mt     :   5,  /* bits 56:52 - Software available 2 */
++        access      :   4,  /* bits 60:57 - p2m_access_t */
++        spp         :   1,  /* bits 61 - SPP flags */
+         tm          :   1,  /* bit 62 - VT-d transient-mapping hint in
+                                shared EPT/VT-d usage */
+         suppress_ve :   1;  /* bit 63 - suppress #VE */
+
+diff --git ./xen/arch/x86/mm/mem_access.c ./xen/arch/x86/mm/mem_access.c
+index a471c74..1b97469 100644
+--- ./xen/arch/x86/mm/mem_access.c
++++ ./xen/arch/x86/mm/mem_access.c
+@@ -490,6 +490,41 @@ unlock_exit:
+     return rc;
+ }
+ 
++static u64 format_spp_spte(u32 spp_wp_bitmap)
++{
++       u64 new_spte = 0;
++       int i = 0;
++
++       /*
++        * One 4K page contains 32 sub-pages, in SPP table L4E, old bits
++        * are reserved, so we need to transfer u32 subpage write
++        * protect bitmap to u64 SPP L4E format.
++        */
++       while ( i < 32 ) {
++               if ( spp_wp_bitmap & (1ULL << i) )
++                       new_spte |= 1ULL << (i * 2);
++
++               i++;
++       }
++
++       return new_spte;
++}
++
++int p2m_set_spp_page_st(struct domain *d, gfn_t gfn, uint32_t access_map)
++{
++    struct p2m_domain *p2m = p2m_get_hostp2m(d);
++    u64 access = format_spp_spte(access_map);
++    unsigned long gfn_l = gfn_x(gfn);
++    int ret = -1;
++
++    p2m_lock(p2m);
++    if ( p2m->spp_set_entry )
++        ret = p2m->spp_set_entry(p2m, gfn_l, access);
++    p2m_unlock(p2m);
++
++    return ret;
++}
++
+ /*
+  * Local variables:
+  * mode: C
+diff --git ./xen/arch/x86/mm/p2m-ept.c ./xen/arch/x86/mm/p2m-ept.c
+index c249286..c9dc29c 100644
+--- ./xen/arch/x86/mm/p2m-ept.c
++++ ./xen/arch/x86/mm/p2m-ept.c
+@@ -38,6 +38,8 @@
+ 
+ #define is_epte_present(ept_entry)      ((ept_entry)->epte & 0x7)
+ #define is_epte_superpage(ept_entry)    ((ept_entry)->sp)
++#define is_sppt_present(spp_entry)      ((spp_entry)->spp & 0x1)
++
+ static inline bool_t is_epte_valid(ept_entry_t *e)
+ {
+     /* suppress_ve alone is not considered valid, so mask it off */
+@@ -253,6 +255,22 @@ static int ept_set_middle_entry(struct p2m_domain *p2m, ept_entry_t *ept_entry)
+     return 1;
+ }
+ 
++static int spp_set_middle_entry(struct p2m_domain *p2m, spp_entry_t *spp_entry)
++{
++    struct page_info *pg;
++
++    pg = p2m_alloc_ptp(p2m, 0);
++    if ( pg == NULL )
++        return 0;
++
++    spp_entry->spp = 0;
++    spp_entry->mfn = page_to_mfn(pg);
++
++    spp_entry->present = 1;
++
++    return 1;
++}
++
+ /* free ept sub tree behind an entry */
+ static void ept_free_entry(struct p2m_domain *p2m, ept_entry_t *ept_entry, int level)
+ {
+@@ -323,6 +341,44 @@ static bool_t ept_split_super_page(struct p2m_domain *p2m,
+     return rv;
+ }
+ 
++static int spp_next_level(struct p2m_domain *p2m,
++                          spp_entry_t **table, unsigned long *gfn_remainder,
++                          int next_level)
++{
++    unsigned long mfn;
++    spp_entry_t *spp_entry, e;
++    u32 shift, index;
++
++    shift = next_level * EPT_TABLE_ORDER;
++
++    index = *gfn_remainder >> shift;
++
++    /* index must be falling into the page */
++    ASSERT(index < EPT_PAGETABLE_ENTRIES);
++
++    spp_entry = (*table) + index;
++
++    /* ept_next_level() is called (sometimes) without a lock.  Read
++     * the entry once, and act on the "cached" entry after that to
++     * avoid races. */
++    e.spp = read_atomic(&(spp_entry->spp));
++
++    if ( !is_sppt_present(&e) )
++    {
++        if ( !spp_set_middle_entry(p2m, spp_entry) )
++            return GUEST_TABLE_MAP_FAILED;
++        else
++            e.spp = read_atomic(&(spp_entry->spp)); /* Refresh */
++    }
++
++    mfn = e.mfn;
++    unmap_domain_page(*table);
++    *table = map_domain_page(_mfn(mfn));
++    *gfn_remainder &= (1UL << shift) - 1;
++    return GUEST_TABLE_NORMAL_PAGE;
++}
++
++
+ /* Take the currently mapped table, find the corresponding gfn entry,
+  * and map the next table, if available.  If the entry is empty
+  * and read_only is set, 
+@@ -709,6 +765,43 @@ out:
+     return rc;
+ }
+ 
++static int
++spp_set_entry(struct p2m_domain *p2m, unsigned long gfn, u64 access)
++{
++    struct spp_data *spp = &p2m->spptp;
++    unsigned long gfn_remainder = gfn;
++    spp_entry_t *table;
++    u64 *pspp_bitmap;
++    u64 old_spp_bitmap;
++    unsigned int i;
++    int ret, rc = 0;
++
++    ASSERT(spp);
++    table = map_domain_page(_mfn(pagetable_get_pfn(p2m_get_spp_pagetable(p2m))));
++
++    for ( i = 3; i > 0; i-- )
++    {
++        ret = spp_next_level(p2m, &table, &gfn_remainder, i);
++        if ( ret != GUEST_TABLE_NORMAL_PAGE )
++        {
++            printk("dazhang1 error oc ret = %x\n", ret);
++            rc = -1;
++            goto out;
++        }
++    }
++
++    pspp_bitmap = (u64 *) (table + gfn_remainder);
++    old_spp_bitmap = read_atomic(pspp_bitmap);
++    if( old_spp_bitmap != access )
++    {
++        write_atomic(pspp_bitmap, access);
++    }
++
++out:
++    unmap_domain_page(table);
++    return rc;
++}
++
+ /*
+  * ept_set_entry() computes 'need_modify_vtd_table' for itself,
+  * by observing whether any gfn->mfn translations are modified.
+@@ -1309,6 +1402,7 @@ int ept_p2m_init(struct p2m_domain *p2m)
+     if ( cpu_has_vmx_ept_spp )
+     {
+         p2m->update_ept_spp_wp = ept_spp_update_wp;
++        p2m->spp_set_entry = spp_set_entry;
+     }
+ 
+     if ( !zalloc_cpumask_var(&ept->invalidate) )
+diff --git ./xen/include/asm-x86/hvm/vmx/vmx.h ./xen/include/asm-x86/hvm/vmx/vmx.h
+index 18383b8..655ce80 100644
+--- ./xen/include/asm-x86/hvm/vmx/vmx.h
++++ ./xen/include/asm-x86/hvm/vmx/vmx.h
+@@ -52,6 +52,16 @@ typedef union {
+     u64 epte;
+ } ept_entry_t;
+ 
++typedef union {
++    struct {
++        u64 present     :   1,  /* bit 0 - spp middle table is present */
++        reserved        :   11, /* bit 1:11 - reserved */
++        mfn             :   40, /* bit 12:51 - Machine physical frame number */
++        reserved2       :   12; /* bit 52:63 - reserved */
++    };
++    u64 spp;
++} spp_entry_t;
++
+ typedef struct {
+     /*use lxe[0] to save result */
+     ept_entry_t lxe[5];
+diff --git ./xen/include/asm-x86/p2m.h ./xen/include/asm-x86/p2m.h
+index adbc1c6..b94ebb2 100644
+--- ./xen/include/asm-x86/p2m.h
++++ ./xen/include/asm-x86/p2m.h
+@@ -268,6 +268,9 @@ struct p2m_domain {
+     long               (*audit_p2m)(struct p2m_domain *p2m);
+     int                (*update_ept_spp_wp)(struct p2m_domain *p2m,
+                                  unsigned long gfn);
++    int                (*spp_set_entry)(struct p2m_domain *p2m,
++                                unsigned long gfn,
++                                u64 access);
+ 
+     /*
+      * P2M updates may require TLBs to be flushed (invalidated).
+
+diff --git ./xen/arch/x86/hvm/vmx/vmx.c ./xen/arch/x86/hvm/vmx/vmx.c
+index 69ce3aa..04ae0d6 100644
+--- ./xen/arch/x86/hvm/vmx/vmx.c
++++ ./xen/arch/x86/hvm/vmx/vmx.c
+@@ -3521,6 +3521,28 @@ static int vmx_handle_apic_write(void)
+     return vlapic_apicv_write(current, exit_qualification & 0xfff);
+ }
+ 
++static int vmx_handle_spp(spp_qual_t q, paddr_t gpa)
++{
++    if ( q.sppt_miss_type )
++    {
++        /*
++         * SPPT Miss :
++         * Subpage Protection Table not present
++         */
++        printk("SPP miss occured at gpa:%lx\n", gpa);
++
++        return true;
++    }
++
++    /*
++     * SPPT Misconfig
++     * This is probably possible that your sppt table
++     * set as a incorrect format
++     */
++    WARN_ON(1);
++    return false;
++}
++
+ void vmx_vmexit_handler(struct cpu_user_regs *regs)
+ {
+     unsigned long exit_qualification, exit_reason, idtv_info, intr_info = 0;
+@@ -4124,6 +4146,15 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
+     case EXIT_REASON_ACCESS_LDTR_OR_TR:
+         vmx_handle_descriptor_access(exit_reason);
+         break;
++    case EXIT_REASON_SPP:
++    {
++        paddr_t gpa;
++
++        __vmread(GUEST_PHYSICAL_ADDRESS, &gpa);
++        __vmread(EXIT_QUALIFICATION, &exit_qualification);
++        vmx_handle_spp(exit_qualification, gpa);
++        break;
++    }
+ 
+     case EXIT_REASON_VMX_PREEMPTION_TIMER_EXPIRED:
+     case EXIT_REASON_INVPCID:
+diff --git ./xen/include/asm-x86/hvm/vmx/vmx.h ./xen/include/asm-x86/hvm/vmx/vmx.h
+index 4889a64..35aada6 100644
+--- ./xen/include/asm-x86/hvm/vmx/vmx.h
++++ ./xen/include/asm-x86/hvm/vmx/vmx.h
+@@ -213,6 +213,7 @@ static inline void pi_clear_sn(struct pi_desc *pi_desc)
+ #define EXIT_REASON_PML_FULL            62
+ #define EXIT_REASON_XSAVES              63
+ #define EXIT_REASON_XRSTORS             64
++#define EXIT_REASON_SPP                 66
+ 
+ /*
+  * Interruption-information format
+@@ -616,6 +617,16 @@ typedef union ept_qual {
+     };
+ } __transparent__ ept_qual_t;
+ 
++/* SPP induced vmexit qualifications definitions */
++typedef union spp_qual {
++    unsigned long raw;
++    struct {
++        unsigned long reserved   :11;
++        bool sppt_miss_type      :1;
++        unsigned long reserved2  :52;
++    };
++} __transparent__ spp_qual_t;
++
+ #define EPT_L4_PAGETABLE_SHIFT      39
+ #define EPT_PAGETABLE_ENTRIES       512
+
+diff --git ./xen/arch/x86/hvm/vmx/vmcs.c ./xen/arch/x86/hvm/vmx/vmcs.c
+index bee5d74..e2a1f1f 100644
+--- ./xen/arch/x86/hvm/vmx/vmcs.c
++++ ./xen/arch/x86/hvm/vmx/vmcs.c
+@@ -1273,6 +1273,12 @@ static int construct_vmcs(struct vcpu *v)
+ 
+         ept->mfn = pagetable_get_pfn(p2m_get_pagetable(p2m));
+         __vmwrite(EPT_POINTER, ept->eptp);
++
++        if ( cpu_has_vmx_ept_spp ) {
++            struct spp_data *spp = &p2m->spptp;
++            spp->mfn = pagetable_get_pfn(p2m_get_spp_pagetable(p2m));
++            __vmwrite(SPPT_POINT, spp->sppt_point);
++        }
+     }
+ 
+     if ( paging_mode_hap(d) )
+diff --git ./xen/arch/x86/mm/p2m.c ./xen/arch/x86/mm/p2m.c
+index e8a57d1..3d618e9 100644
+--- ./xen/arch/x86/mm/p2m.c
++++ ./xen/arch/x86/mm/p2m.c
+@@ -609,7 +609,7 @@ void p2m_free_ptp(struct p2m_domain *p2m, struct page_info *pg)
+  */
+ int p2m_alloc_table(struct p2m_domain *p2m)
+ {
+-    struct page_info *p2m_top;
++    struct page_info *p2m_top, *p2m_spp;
+     struct domain *d = p2m->domain;
+     int rc = 0;
+ 
+@@ -639,8 +639,17 @@ int p2m_alloc_table(struct p2m_domain *p2m)
+         return -ENOMEM;
+     }
+ 
++    p2m_spp = p2m_alloc_ptp(p2m, PGT_l4_page_table);
++    if ( p2m_spp == NULL )
++    {
++        p2m_unlock(p2m);
++        return -ENOMEM;
++    }
++
+     p2m->phys_table = pagetable_from_mfn(page_to_mfn(p2m_top));
+ 
++    p2m->spp_phys_table = pagetable_from_mfn(page_to_mfn(p2m_spp));
++
+     if ( hap_enabled(d) )
+         iommu_share_p2m_table(d);
+ 
+@@ -678,6 +687,7 @@ void p2m_teardown(struct p2m_domain *p2m)
+     p2m_lock(p2m);
+     ASSERT(atomic_read(&d->shr_pages) == 0);
+     p2m->phys_table = pagetable_null();
++    p2m->spp_phys_table = pagetable_null();
+ 
+     while ( (pg = page_list_remove_head(&p2m->pages)) )
+         d->arch.paging.free_page(d, pg);
+diff --git ./xen/include/asm-x86/hvm/vmx/vmcs.h ./xen/include/asm-x86/hvm/vmx/vmcs.h
+index 139f590..4843bc4 100644
+--- ./xen/include/asm-x86/hvm/vmx/vmcs.h
++++ ./xen/include/asm-x86/hvm/vmx/vmcs.h
+@@ -56,6 +56,16 @@ struct ept_data {
+     cpumask_var_t invalidate;
+ };
+ 
++struct spp_data {
++   union {
++        struct {
++            u32 reserved:12;
++            u64 mfn:52;
++        };
++        u64 sppt_point;
++   };
++};
++
+ #define _VMX_DOMAIN_PML_ENABLED    0
+ #define VMX_DOMAIN_PML_ENABLED     (1ul << _VMX_DOMAIN_PML_ENABLED)
+ struct vmx_domain {
+@@ -391,6 +401,7 @@ enum vmcs_field {
+     VMWRITE_BITMAP                  = 0x00002028,
+     VIRT_EXCEPTION_INFO             = 0x0000202a,
+     XSS_EXIT_BITMAP                 = 0x0000202c,
++    SPPT_POINT                      = 0x00002030,
+     TSC_MULTIPLIER                  = 0x00002032,
+     GUEST_PHYSICAL_ADDRESS          = 0x00002400,
+     VMCS_LINK_POINTER               = 0x00002800,
+diff --git ./xen/include/asm-x86/p2m.h ./xen/include/asm-x86/p2m.h
+index 6395e8f..0561643 100644
+--- ./xen/include/asm-x86/p2m.h
++++ ./xen/include/asm-x86/p2m.h
+@@ -193,6 +193,8 @@ struct p2m_domain {
+     /* Shadow translated domain: p2m mapping */
+     pagetable_t        phys_table;
+ 
++    pagetable_t        spp_phys_table;
++
+     /* Same as domain_dirty_cpumask but limited to
+      * this p2m and those physical cpus whose vcpu's are in
+      * guestmode.
+@@ -339,6 +341,9 @@ struct p2m_domain {
+         struct ept_data ept;
+         /* NPT-equivalent structure could be added here. */
+     };
++    union {
++        struct spp_data spptp;
++    };
+ 
+      struct {
+          spinlock_t lock;
+@@ -385,7 +390,8 @@ static inline bool_t p2m_is_altp2m(const struct p2m_domain *p2m)
+     return p2m->p2m_class == p2m_alternate;
+ }
+ 
+-#define p2m_get_pagetable(p2m)  ((p2m)->phys_table)
++#define p2m_get_pagetable(p2m)      ((p2m)->phys_table)
++#define p2m_get_spp_pagetable(p2m)  ((p2m)->spp_phys_table)
+ 
+ /*
+  * Ensure any deferred p2m TLB flush has been completed on all VCPUs.
+
+diff --git ./xen/arch/x86/hvm/vmx/vmx.c ./xen/arch/x86/hvm/vmx/vmx.c
+index 04ae0d6..a4c24bb 100644
+--- ./xen/arch/x86/hvm/vmx/vmx.c
++++ ./xen/arch/x86/hvm/vmx/vmx.c
+@@ -2497,6 +2497,12 @@ const struct hvm_function_table * __init start_vmx(void)
+         vmx_function_table.get_guest_bndcfgs = vmx_get_guest_bndcfgs;
+     }
+ 
++    if ( cpu_has_vmx_ept_spp )
++    {
++        vmx_function_table.hap_capabilities &= ~HVM_HAP_SUPERPAGE_2MB;
++        vmx_function_table.hap_capabilities &= ~HVM_HAP_SUPERPAGE_1GB;
++    }
++
+     setup_vmcs_dump();
+ 
+     lbr_tsx_fixup_check();
+
+diff --git ./xen/arch/x86/hvm/vmx/vmcs.c ./xen/arch/x86/hvm/vmx/vmcs.c
+index 8103b20..bee5d74 100644
+--- ./xen/arch/x86/hvm/vmx/vmcs.c
++++ ./xen/arch/x86/hvm/vmx/vmcs.c
+@@ -50,6 +50,9 @@ boolean_param("unrestricted_guest", opt_unrestricted_guest_enabled);
+ static bool_t __read_mostly opt_apicv_enabled = 1;
+ boolean_param("apicv", opt_apicv_enabled);
+ 
++static bool_t __read_mostly opt_spp_enabled = 0;
++boolean_param("spp_enable", opt_spp_enabled);
++
+ /*
+  * These two parameters are used to config the controls for Pause-Loop Exiting:
+  * ple_gap:    upper bound on the amount of time between two successive
+@@ -138,6 +141,7 @@ static void __init vmx_display_features(void)
+     P(cpu_has_vmx_virt_exceptions, "Virtualisation Exceptions");
+     P(cpu_has_vmx_pml, "Page Modification Logging");
+     P(cpu_has_vmx_tsc_scaling, "TSC Scaling");
++    P(cpu_has_vmx_ept_spp, "EPT Sub-page Write Protection");
+ #undef P
+ 
+     if ( !printed )
+@@ -243,6 +247,8 @@ static int vmx_init_vmcs_config(void)
+             opt |= SECONDARY_EXEC_UNRESTRICTED_GUEST;
+         if ( opt_pml_enabled )
+             opt |= SECONDARY_EXEC_ENABLE_PML;
++        if ( opt_spp_enabled )
++            opt |= SECONDARY_EXEC_ENABLE_SPP;
+ 
+         /*
+          * "APIC Register Virtualization" and "Virtual Interrupt Delivery"
+@@ -336,6 +342,14 @@ static int vmx_init_vmcs_config(void)
+         _vmx_secondary_exec_control &= ~ SECONDARY_EXEC_PAUSE_LOOP_EXITING;
+     }
+ 
++    /* SPP cannot be supported if EPT is not used */
++    if ( !(_vmx_secondary_exec_control & SECONDARY_EXEC_ENABLE_EPT) )
++        _vmx_secondary_exec_control &= ~SECONDARY_EXEC_ENABLE_SPP;
++
++    /* Turn off opt_spp_enabled if SPP feature is not present */
++    if ( !(_vmx_secondary_exec_control & SECONDARY_EXEC_ENABLE_SPP) )
++        opt_spp_enabled = 0;
++
+     min = VM_EXIT_ACK_INTR_ON_EXIT;
+     opt = VM_EXIT_SAVE_GUEST_PAT | VM_EXIT_LOAD_HOST_PAT |
+           VM_EXIT_CLEAR_BNDCFGS;
+diff --git ./xen/include/asm-x86/hvm/vmx/vmcs.h ./xen/include/asm-x86/hvm/vmx/vmcs.h
+index e3cdfdf..139f590 100644
+--- ./xen/include/asm-x86/hvm/vmx/vmcs.h
++++ ./xen/include/asm-x86/hvm/vmx/vmcs.h
+@@ -235,6 +235,7 @@ extern u32 vmx_vmentry_control;
+ #define SECONDARY_EXEC_ENABLE_PML               0x00020000
+ #define SECONDARY_EXEC_ENABLE_VIRT_EXCEPTIONS   0x00040000
+ #define SECONDARY_EXEC_XSAVES                   0x00100000
++#define SECONDARY_EXEC_ENABLE_SPP               0x00800000
+ #define SECONDARY_EXEC_TSC_SCALING              0x02000000
+ extern u32 vmx_secondary_exec_control;
+ 
+@@ -312,6 +313,8 @@ extern u64 vmx_ept_vpid_cap;
+     (vmx_secondary_exec_control & SECONDARY_EXEC_XSAVES)
+ #define cpu_has_vmx_tsc_scaling \
+     (vmx_secondary_exec_control & SECONDARY_EXEC_TSC_SCALING)
++#define cpu_has_vmx_ept_spp \
++    (vmx_secondary_exec_control & SECONDARY_EXEC_ENABLE_SPP)
+ 
+ #define VMCS_RID_TYPE_MASK              0x80000000

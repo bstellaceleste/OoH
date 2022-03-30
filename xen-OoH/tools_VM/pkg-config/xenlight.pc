@@ -1,0 +1,12 @@
+prefix=/home/stella/PML-Xen10/tools/libxl/../..
+includedir=/home/stella/PML-Xen10/tools/libxl
+libdir=/home/stella/PML-Xen10/tools/libxl
+xenfirmwaredir=/usr/local/lib/xen/boot
+libexec_bin=/usr/local/lib/xen/bin
+
+Name: Xenlight
+Description: The Xenlight library for Xen hypervisor
+Version: 4.10.0
+Cflags: -I${includedir}
+Libs: -Wl,-rpath-link=${libdir} -lxenlight
+Requires.private: xentoollog,xenevtchn,xencontrol,xenguest,xenstore
