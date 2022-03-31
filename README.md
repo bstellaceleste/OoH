@@ -5,7 +5,7 @@ Extended PML (EPML) that we integrated into CRIU and Boehm GC. Evaluation result
 
 OoH is implemented using Xen 4.10.0 hypervisor, Linux 4.15.0 guest OS, and BOCHS 2.6.11 Intel x86 emulator (only for EPML, which extends the hardware), Boehm Garbage Collector and CRIU.
 
-This repo provides the tools and directives to test SPML and EPML implementations.
+This repo provides tools and guidelines for testing SPML and EPML implementations.
 
 # Overview
 
@@ -17,7 +17,7 @@ We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML
 To facilitate the tests, the following material is provided (and should be downloaded):
 - [Xen 4.10 patched](xen-OoH)
 - [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
-- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH) and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
+- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH), and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
 - A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with the Xen tools installed for PML activation from the guest.
 
 ### Environment Setup
@@ -25,13 +25,13 @@ To facilitate the tests, the following material is provided (and should be downl
 #### Prerequisites
 1. Operating System: `Ubuntu 18.04`
 
-2. CPU brand: `Intel` 
+2. CPU Brand: `Intel` 
 
 2. Support for PML feature: 
     * `sudo modprobe msr`
     * `sudo rdmsr 0x48BH` : if PML is supported, bit at position **49** will be set.
 
-3. Dependencies for Xen, ssh and nfs:
+3. Dependencies for Xen, ssh, and nfs:
    ```
    sudo apt update
    sudo apt build-dep xen
@@ -94,7 +94,7 @@ export GC_ENABLE_INCREMENTAL
 export GC_PRINT_VERBOSE_STATS
 export GC_USE_GETWRITEWATCH
 ```
-> Note: These variables should be exported at each reboot, otherwhise defined in an env file.
+> Note: These variables should be exported at each reboot, otherwise defined in an env file.
 
 #### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications and [GCBench](https://hboehm.info/gc/gc_bench/)
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
@@ -122,7 +122,7 @@ sudo make
 
 **3. Execute applications**
 
-All applications are in the `tests` dir, and datasets required may have been previously downloaded in the _prerequisites_ section.
+All applications are in the `tests` dir, and the datasets required may have been previously downloaded in the _prerequisites_ section.
 > From boehm-OoH/Use_Case_Apps
 
 First, uncompress it dataset folder in the corresponding bench dir:
