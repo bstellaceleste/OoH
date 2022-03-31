@@ -112,7 +112,7 @@ Now that our environment is set and the GC that integrates SPML is compiled, we 
 The first thing is to load the OoH kernel module:
 
 `su (password: toto)`
-> You should be in root mode -do not use sudo-
+> You should log in as superuser -!! do not use sudo-
 ```
 cd /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0
 make
