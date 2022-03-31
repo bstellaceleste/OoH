@@ -96,7 +96,7 @@ export GC_USE_GETWRITEWATCH
 ```
 > Note: These variables should be exported at each reboot, otherwhise defined in an env file.
 
-#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
+#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications and [GCBench](https://hboehm.info/gc/gc_bench/)
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
 **1. Load OoH kernel module**
@@ -179,3 +179,10 @@ unzip -d test/word_count/dataset datasets/dataset_word
    #       endif
    ```
    * recompile boehm as previously explained and re-execute the applications.
+
+
+## Extended PML (EPML)
+
+The use of EPML is more tricky since it should be emulated.
+
+We use in our implementation the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator for which we provide the [patched](Bochs-OoH) version.
