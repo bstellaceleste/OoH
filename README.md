@@ -15,6 +15,14 @@ We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML
 ## Shadow PML (SPML)
 
 To facilitate the tests, the following material is provided (and should be downloaded):
+> Most of the ressources are stored on [Amazon S3](https://s3.console.aws.amazon.com/s3/buckets/artifacteval?region=us-east-2&tab=objects#). You should sign in as an **IAM** user, with the following information: 
+> 
+> Account ID: **581028953800** 
+> 
+> User Name: **Artifact-Evaluators**
+> 
+> Password: **ArtifactSC22**
+
 - [Xen 4.10 patched](xen-OoH)
 - [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
 - The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH), and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
