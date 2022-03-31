@@ -39,7 +39,7 @@ To facilitate the tests, the following material is provided (and should be downl
    sudo apt install openssh-common openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
-4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independant from the user's `$HOME` environment it allows easier portability and deployment.
+4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
    
 #### Xen Installation
 > All commands in sudo (_compilation and installaion might take a while_)
