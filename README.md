@@ -172,7 +172,7 @@ unzip -d test/word_count/dataset datasets/dataset_word
    * GCBench
      ```
      cd gcbench
-     gcc -o GCBench GCBench.c
+     gcc -I ../include/ GCBench.c -I ../.libs/libgc.a -o GCBench 
      ./GCBench
      ```
 
