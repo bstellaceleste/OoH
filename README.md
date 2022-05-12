@@ -104,7 +104,7 @@ export GC_USE_GETWRITEWATCH
 ```
 > Note: These variables should be exported at each reboot, otherwise defined in an env file.
 
-#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications and [GCBench](https://hboehm.info/gc/gc_bench/)
+#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
 **1. Load OoH kernel module**
@@ -168,12 +168,6 @@ unzip -d test/word_count/dataset datasets/dataset_word
      cd tests/word_count
      unzip -d . dataset.zip
      ./word_count dataset/word_100MB.txt
-     ```
-   * GCBench
-     ```
-     cd gcbench
-     gcc -I ../include/ GCBench.c -I ../.libs/libgc.a -o GCBench 
-     ./GCBench
      ```
 
 #### Comparison With `/proc`
