@@ -24,9 +24,10 @@ To facilitate the tests, the following material is provided (and should be downl
 > Password: **ArtifactSC22**
 
 - [Xen 4.10 patched](xen-OoH)
-- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). The user can however find the patch [here](linux-OoH/patch).
+- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). 
+<!--- he user can however find the patch [here](linux-OoH/patch). -->T
 - The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH), and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
-- A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with the Xen tools installed for PML activation from the guest.
+- A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with Linux patched and the Xen tools (for PML activation from the guest) installed.
 
 ### Environment Setup
 
@@ -37,7 +38,8 @@ To facilitate the tests, the following material is provided (and should be downl
 
 2. Support for PML feature: 
     * `sudo modprobe msr`
-    * `sudo rdmsr 0x48BH` : if PML is supported, bit at position **49** will be set.
+    * `sudo rdmsr 0x48BH` : if PML is supported, the bit at position **49** will be set (convert the `rdmsr` output from hexo to binary).
+    > If you issue a `rdmsr : command not found`, then install `msr-tools`(`sudo apt install msr-tools`)
 
 3. Dependencies for Xen, ssh, and nfs:
    ```
@@ -47,7 +49,7 @@ To facilitate the tests, the following material is provided (and should be downl
    sudo apt install openssh-common openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
-4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
+4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file (containing Xen and Boehm) of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
    
 #### Xen Installation
 > All commands in sudo (_compilation and installaion might take a while_)
