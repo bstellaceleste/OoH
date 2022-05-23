@@ -4,13 +4,11 @@
 *~
 *.swp
 *.o
-*.d
 *.d2
 *.opic
 *.a
 *.so
 *.so.[0-9]*
-*.bin
 *.bak
 *.tmp
 *.spot
