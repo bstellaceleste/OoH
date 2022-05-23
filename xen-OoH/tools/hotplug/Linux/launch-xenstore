@@ -15,7 +15,7 @@
 # License along with this library; If not, see <http://www.gnu.org/licenses/>.
 #
 
-XENSTORED=/usr/local/sbin/xenstored
+XENSTORED=/usr/local/sbin/oxenstored
 
 . /etc/xen/scripts/hotplugpath.sh
 
@@ -55,7 +55,7 @@ test -f /etc/default/xencommons && . /etc/default/xencommons
 [ "$XENSTORETYPE" = "daemon" ] && {
 	[ -z "$XENSTORED_ROOTDIR" ] && XENSTORED_ROOTDIR="/var/lib/xenstored"
 	[ -z "$XENSTORED_TRACE" ] || XENSTORED_ARGS="$XENSTORED_ARGS -T /var/log/xen/xenstored-trace.log"
-	[ -z "$XENSTORED" ] && XENSTORED=/usr/local/sbin/xenstored
+	[ -z "$XENSTORED" ] && XENSTORED=/usr/local/sbin/oxenstored
 	[ -x "$XENSTORED" ] || {
 		echo "No xenstored found"
 		exit 1
