@@ -38,7 +38,7 @@ To facilitate the tests, the following material is provided (and should be downl
 
 2. Support for PML feature: 
     * `sudo modprobe msr`
-    * `sudo rdmsr 0x48BH` : if PML is supported, the bit at position **49** will be set (convert the `rdmsr` output from hexo to binary).
+    * `sudo rdmsr 0x48BH` : if PML is supported, the bit at position **49** will be set (convert the `rdmsr` output from hexa to binary).
     > If you issue a `rdmsr : command not found`, then install `msr-tools`(`sudo apt install msr-tools`)
 
 3. Dependencies for Xen, ssh, and nfs:
@@ -46,23 +46,24 @@ To facilitate the tests, the following material is provided (and should be downl
    sudo apt update
    sudo apt build-dep xen
    sudo apt install libc6-dev libglib2.0-dev libyajl-dev yajl-tools libbz2-dev bison flex zlib1g-dev git-core debhelper debconf-utils debootstrap fakeroot gcc make binutils  liblz-dev  python-dev libncurses-dev libcurl4-openssl-dev libx11-dev uuid-dev libaio-dev pkg-config bridge-utils udev bison flex gettext bin86 bcc iasl gcc-multilib libperl-dev libgtk2.0-dev
-   sudo apt install openssh-common openssh-client
+   sudo apt install openssh-server openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
 4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file (containing Xen and Boehm) of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
    
 #### Xen Installation
-> All commands in sudo (_compilation and installaion might take a while_)
+> All commands in sudo (_compilation and installation might take a while_)
+> Note: You must have an internet connexion as Xen will download some tools during the `make` phase
 ```
 cd /mnt/tmp/xen-OoH
 ./configure
-make
-make install
+make -j
+make -j install
 ldconfig
 update-grub
 ```
 After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`).
-To start Xen demon, type the following commands: `sudo /etc/init.d/xencommons start`.
+To start the Xen deamon, type the following command: `sudo /etc/init.d/xencommons start`.
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
 #### VM Creation
