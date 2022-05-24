@@ -1,0 +1,32 @@
+*********à mieux libeller plus tard**************
+
+--> configuration : ./configure --enable-x86-64 --enable-vmx=2 --enable-cpu-level=6 --enable-es1370 --with-all-libs --enable-e1000 --enable-ltdl-install --enable-plugins --enable-ne2000 --with-sdl --with-svga --with-term  --enable-smp  --enable-all-optimizations --enable-avx --enable-evex --enable-long-phy-address
+
+--> build and install : make && sudo make install
+
+--> fichier de config bochsrc : 
+	-> les disques: voir les lignes ata[0-3], tu peux utiliser un disque *ata0-master* pour le bootloader (image de la VM) et un autre *ata1-master* comme disque externe monté sur la machine hôte
+		> depuis l'hôte: * dd if=/dev/zero of=disque_à_monter.img bs=1G count=10
+				 * mkfs.vfat disque_à_monter.img 
+				 * mkdir disque_monté_dans_lhote && sudo mount -t vfat -o loop disque_à_monter.img  disque_monté_dans_lhote/
+				maintenant chaque fois que l'on copiera qlq chose dans ce dossier il sera accessible depuis le guest bochs
+		> depuis le guest: * sudo fdisk -l (pour trouver le chemin vers notre ata1-master)
+				   * mkdir disque_monté && sudo mount /dev/sdX  disque_monté/
+				 
+
+	-> le réseau: voir la partie e1000. tout d'abord il faut être connecté en éthernet, et depuis ifconfig récupérer l'addr ethernet de l'hôte (dison ethX), son masque ainsi que la gatewaty du réseau (route -n). s'il y a plusieurs interfaces éthernet, retrouver celle active en faisant nmcli dev status
+		> sur la ligne e1000, mettre dans le champ ethdev l'addr ethX
+		> après avoir démarré le guest:
+			* retrouver le nom de l'interface éthernet (je ne sais comment le faire normalement, je l'ai lu dans les logs au démarrage, chez moi c'étaient enp0s2 et enp0s3 en fonction de l'adaptateur utilisé, ne2k ou e1000)
+			* la configurer: ifconfig ethXX addr_hote.xxx/masque (une adresse dans la plage du réseau dans lequel se trouve l'hôte), add default gw gw_de_lhote, echo "nameserver 8.8.8.8" > /etc/resolv.conf
+			* ensuite vérifier qu'on parvient bien à faire un ping vers la gw puis vers 8.8.8.8 et ensuit faire un apt update
+
+--> cpu configuration : 
+	-> pour avoir l'aide sur les cpus supportés : bochs --help cpu (/features /etc.). il faut modifier le type de cpu qui est présent dans le fichier de config par défaut car d'après la façon dont le code est écrit, les features que xen te présentera comme étant supportés dépendront du model du cpu choisi (ce qui est logique tout compte fait)
+	-> pour avoir pml et spp il faut choisir le model: corei7_icelake_u (à partir de skylake on a pml)
+	-> une fois le configure fait avec avx pour avoir le pml, il faut bien configurer le cpuid dans bochsrc sinon impossible de créer une vm (voir le fichier dans le git)
+	-> pour résoudre le pb: "VMread64 can't access encoding 0x0000202c, offset=0xffffffff", j'ai dû télécharger depuis le svn, pour avoir la dernière révision où ce pb est résolu
+
+
+--> TODO: trouver comment attribuer plus de mémoire, créer un répertoire dans mon git avec le code de bochs, 
+
