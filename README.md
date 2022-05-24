@@ -67,11 +67,7 @@ To start the Xen deamon, type the following command: `sudo /etc/init.d/xencommon
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
 #### VM Creation
-A configuration [file](vm.cfg) is provided to create a VM.
-
-You must first fill the correct **absolute** path to the VM image.
-
-After which you can use the following command: `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
+A configuration [file](vm.cfg) is provided to create a VM using `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
 
 To access the VM, you need to create and configure a bridge:
 ```
