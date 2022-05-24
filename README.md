@@ -129,15 +129,14 @@ sudo make
 
 **3. Execute applications**
 
-All applications are in the `tests` dir, and the datasets required may have been previously downloaded in the _prerequisites_ section.
-> From boehm-OoH/Use_Case_Apps
+All applications are in the `boehm/Use_Case_Apps/phoenix-2.0/tests` dir, and the datasets required may have been previously downloaded in the **_Prerequisites_** Section.
 
-First, uncompress it dataset folder in the corresponding bench dir:
+Now, leave the VM a moment and go back to your host in the `/mnt/tmp/OoH-SPML` dir to uncompress dataset.zip in each corresponding application dir:
 ```
 unzip -d . datasets
-unzip -d test/histogram/dataset datasets/dataset_hist
-unzip -d test/string_match/dataset datasets/dataset_string
-unzip -d test/word_count/dataset datasets/dataset_word
+unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/histogram/ datasets/dataset_hist
+unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/string_match/ datasets/dataset_string
+unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/word_count/ datasets/dataset_word
 ```
 
    * histogram
