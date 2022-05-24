@@ -25,8 +25,8 @@ To facilitate the tests, the following material is provided (and should be downl
 
 - [Xen 4.10 patched](xen-OoH)
 - [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). 
-<!--- he user can however find the patch [here](linux-OoH/patch). -->T
-- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already [patched](bohem-OoH), and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
+<!--- The user can however find the patch [here](linux-OoH/patch). -->
+- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already patched, and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
 - A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with Linux patched and the Xen tools (for PML activation from the guest) installed.
 
 ### Environment Setup
@@ -78,7 +78,7 @@ To access the VM, you need to create and configure a bridge:
 sudo brctl addbr xenbr0
 sudo ifconfig xenbr0 10.0.0.1
 ```
-To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo routing.sh ethX`.
+To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo ./routing.sh ethX`.
 
 ### Testing
 
