@@ -109,7 +109,7 @@ export GC_USE_GETWRITEWATCH
 #### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
-**1. Load OoH kernel module**
+**1. Load the OoH kernel module**
 
 The first thing is to load the OoH kernel module:
 
@@ -130,7 +130,7 @@ cd Use_Case_Apps/phoenix-2.0/
 sudo make
 ```
 
-**3. Execute applications**
+**3. Run applications**
 
 All applications are in the `boehm/Use_Case_Apps/phoenix-2.0/tests` dir, and the datasets required may have been previously downloaded in the **_Prerequisites_** Section.
 
