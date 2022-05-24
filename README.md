@@ -178,11 +178,11 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    #         define PML_VDB
    #       endif
    ```
-   * recompile boehm as previously explained and re-execute the applications.
+   * recompile boehm as previously explained and re-execute the applications from 3.).
 
 
 ## Extended PML (EPML)
 
-The use of EPML is more tricky since it should be emulated.
+The use of EPML is a bit more tricky since it should be emulated.
 
-We use in our implementation the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator for which we provide the [patched](Bochs-OoH) version.
+We use in our implementation the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator.
