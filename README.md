@@ -115,7 +115,7 @@ The first thing is to load the OoH kernel module:
 ```
 cd /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0
 make
-insmod uio_vtf
+insmod uio_vtf.ko
 ```
 If the module has been successfully loaded, you must find in `/dev` a device named **`uio0`**.
 
