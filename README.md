@@ -140,12 +140,11 @@ unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/word_count/ datasets/dataset_
 ```
 Now that all datasets have been uncompressed, you can go back to the VM and run the tests:
 
-> From /home/stella/boehm/Use_Case_Apps/phoenix-2.0
+> From /home/stella/boehm/Use_Case_Apps/phoenix-2.0 and in superuser mode `su (password: toto)`
 
    * histogram
      ```
      cd tests/histogram
-     unzip -d . dataset.zip
      ./histogram dataset/large.bmp
      ```
    * kmeans
@@ -161,13 +160,11 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    * string_match
      ```
      cd tests/string_match
-     unzip -d . dataset.zip
      ./string_match dataset/key_file_200MB.txt
      ```
    * word_count
      ```
      cd tests/word_count
-     unzip -d . dataset.zip
      ./word_count dataset/word_100MB.txt
      ```
 
