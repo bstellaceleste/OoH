@@ -12,7 +12,7 @@ This repo provides tools and guidelines for testing SPML and EPML implementation
 We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML (noted EPML). SPML requires no hardware modification, while EPML slightly extends the hardware for better performance. The following figure presents the architecture of the two solutions. In the guest, we provide OoH as a userspace I/O (UIO) driver composed of a kernel module (OoH Module) and a userspace library (OoH Lib). At load time, the former does a set of initialization operations, including ring buffer (RB) allocation that is shared with userspace (and the hypervisor in SMPL only). Tracker uses OoH Lib to register the PID of Tracked with OoH Module. From there on, the processor can log dirty pages’ addresses to a 512KB PML buffer, which is copied to RB once full. Relying on OoH Lib, Tracker can periodically fetch the collected addresses to achieve its goal (e.g., checkpointing). EPML differs from SPML in two ways: (1) With EPML, the processor also logs GVAs, thus avoiding costly reverse mapping in OhH Lib; (2) With EPML, the guest kernel can directly deal with the processor, thus avoiding costly hypercalls. 
 ![design](design2.png)
 
-## Shadow PML (SPML)
+# Shadow PML (SPML)
 
 To facilitate the tests, the following material is provided (and should be downloaded):
 > Most of the ressources are stored on [Amazon S3](https://s3.console.aws.amazon.com/s3/buckets/artifacteval?region=us-east-2&tab=objects#). You should sign in as an **IAM** user, with the following information: 
@@ -29,9 +29,9 @@ To facilitate the tests, the following material is provided (and should be downl
 - The use case [Boehm GC](https://github.com/ivmai/bdwgc) already patched, and datasets for its applications.
 - A VM image with Linux patched and the Xen tools (for PML activation from the guest) installed.
 
-### Environment Setup
+## Environment Setup
 
-#### Prerequisites
+### Prerequisites
 1. Operating System: `Ubuntu 18.04`
 
 2. CPU Brand: `Intel` 
@@ -54,7 +54,7 @@ To facilitate the tests, the following material is provided (and should be downl
    * The [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) into `/mnt/tmp/OoH`.
    * The [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for the Phoenix applications.
    
-#### Xen Installation
+### Xen Installation
 > All commands in sudo (_compilation and installation might take a while_)
 > Note: You must have an internet connexion as Xen will download some tools during the `make` phase
 ```
@@ -69,7 +69,7 @@ After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`).
 To start the Xen deamon, type the following command: `sudo /etc/init.d/xencommons start`.
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
-#### VM Creation
+### VM Creation
 A configuration [file](vm.cfg) is provided to create a VM using `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
 
 To access the VM, you need to create and configure a bridge:
@@ -79,14 +79,14 @@ sudo ifconfig xenbr0 10.0.0.1
 ```
 To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo ./routing.sh ethX`.
 
-### Testing
+## Testing
 
-#### Accessing the VM
+### Accessing the VM
 When the VM has completely booted (its state is `b` -for _blocked_ i.e., waiting or sleeping- in the list), you can access it via ssh: `ssh stella@10.0.0.2`. The password is `toto`.
 
 The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the Boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
 
-#### Compiling Boehm GC
+### Compiling Boehm GC
 Boehm is compiled in the VM (from `$HOME`) as follows:
 ```
 cd boehm
@@ -106,7 +106,7 @@ export GC_USE_GETWRITEWATCH
 ```
 > Note: These variables should be exported at each reboot, otherwise defined in an env file.
 
-#### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
+### Testing Boehm GC with [Phoenix](https://github.com/kozyraki/phoenix) Applications
 Now that our environment is set and the GC that integrates SPML is compiled, we can test it using the Phoenix benchmark suite.
 
 **1. Load the OoH kernel module**
@@ -171,7 +171,7 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
      ./word_count dataset/word_100MB.txt
      ```
 
-#### Comparison With `/proc`
+### Comparison With `/proc`
 
 `/proc` is the default technique implemented in Boehm. To perform tests with the latter:
    * edit the file `boehm/include/private/gcconfig.h`
@@ -184,8 +184,12 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    * recompile boehm as previously explained and re-execute the applications from 3.).
 
 
-## Extended PML (EPML)
+# Extended PML (EPML)
 
 The use of EPML is a bit more tricky since it should be emulated.
 
 We use to this end the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator.
+
+You have a [bochs](bochs) folder in the repo dir downloaded. You can find the Bochs installation procedure [here](https://github.com/bstellaceleste/Bochs-svn/README.md).
+
+Once installed, you can find the previous procedure to emulated a host with Xen and create a virtual machine exactely as in the **SPML** Section.
