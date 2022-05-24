@@ -138,6 +138,9 @@ unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/histogram/ datasets/dataset_h
 unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/string_match/ datasets/dataset_string
 unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/word_count/ datasets/dataset_word
 ```
+Now that all datasets have been uncompressed, you can go back to the VM and run the tests:
+
+> From /home/stella/boehm/Use_Case_Apps/phoenix-2.0
 
    * histogram
      ```
