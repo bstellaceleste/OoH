@@ -23,11 +23,11 @@ To facilitate the tests, the following material is provided (and should be downl
 > 
 > Password: **ArtifactSC22**
 
-- [Xen 4.10 patched](xen-OoH)
-- [Linux 4.15 patched and compiled](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip). We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). 
+- Xen 4.10 patched
+- Linux 4.15 patched and compiled. We rather provide the compiled version (with the vmlinuz image) since the compilation can take some time (usually more than an hour). 
 <!--- The user can however find the patch [here](linux-OoH/patch). -->
-- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already patched, and [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for its applications.
-- A [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) with Linux patched and the Xen tools (for PML activation from the guest) installed.
+- The use case [Boehm GC](https://github.com/ivmai/bdwgc) already patched, and datasets for its applications.
+- A VM image with Linux patched and the Xen tools (for PML activation from the guest) installed.
 
 ### Environment Setup
 
@@ -49,7 +49,10 @@ To facilitate the tests, the following material is provided (and should be downl
    sudo apt install openssh-server openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
-4. Sources: [download](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) the zip file (containing Xen and Boehm) of the repo and uncompress it into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
+4. Sources. Download:
+   * [Linux](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip) and [the zip file](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) of the repo (containing Xen and Boehm) and uncompress them into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
+   * The [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) into `/mnt/tmp/OoH`.
+   * The [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for the Phoenix applications.
    
 #### Xen Installation
 > All commands in sudo (_compilation and installation might take a while_)
@@ -131,7 +134,7 @@ sudo make
 
 All applications are in the `boehm/Use_Case_Apps/phoenix-2.0/tests` dir, and the datasets required may have been previously downloaded in the **_Prerequisites_** Section.
 
-Now, leave the VM a moment and go back to your host in the `/mnt/tmp/OoH-SPML` dir to uncompress dataset.zip in each corresponding application dir:
+Now, leave the VM a moment and go back to your host in the `/mnt/tmp/OoH` dir to uncompress dataset.zip in each corresponding application dir:
 ```
 unzip -d . datasets
 unzip -d boehm-OoH/Use_Case_Apps/phoenix-2.0/tests/histogram/ datasets/dataset_hist
