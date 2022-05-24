@@ -79,9 +79,9 @@ To provide the VM with network access to the Internet, use the [routing](routing
 ### Testing
 
 #### Accessing the VM
-When the VM has completely booted (its state is `r` -for _ready_- in the list), you can access it via ssh: `ssh stella@10.0.0.2`. The password is `toto`.
+When the VM has completely booted (its state is `b` -for _blocked_ i.e., waiting or sleeping- in the list), you can access it via ssh: `ssh stella@10.0.0.2`. The password is `toto`.
 
-The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
+The VM boots by default on the modified kernel, and in the `$HOME` directory there is a config script that automatically mounts the linux-OoH and the Boehm directories respectively to `/mnt/tmp/linux-4.15-rc7` and `$HOME/boehm` inside the VM.
 
 #### Compiling Boehm GC
 Boehm is compiled in the VM (from `$HOME`) as follows:
