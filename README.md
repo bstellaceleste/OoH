@@ -194,6 +194,6 @@ The use of EPML is a bit more tricky since it should be emulated.
 
 We use to this end the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator.
 
-You have a [bochs](bochs) folder in the repo dir downloaded. You can find the Bochs installation procedure [here](https://github.com/bstellaceleste/Bochs-svn/README.md).
+You have a [bochs](bochs) folder in the downloaded repo. In the installation [procedure](bochs/README.md) you will find how to emulate an launch a host using Bochs.
 
-Once installed, you can find the previous procedure to emulated a host with Xen and create a virtual machine exactely as in the **SPML** Section.
+Once the emulated host is launched, you can install Xen and create a virtual machine exactely as in the **SPML** Section, and follow the above guidelines to repeat the experiments.
