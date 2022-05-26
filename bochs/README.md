@@ -60,7 +60,7 @@ Search for the config e1000. First of all, you should be connected via ethernet;
 	* Configure that interface: ifconfig enp0sX host_addr.xxx/mask (an address in the same network bandwidth as the physical host), add default gw gw_de_lhote, echo "nameserver 8.8.8.8" > /etc/resolv.conf
 	* Next, verify that you can ping the gw and 8.8.8.8, and then do an apt update
 
-> Tips: Because the emulation can be extremely slow, and also because an ethernet connection will most likely not always be available, it will be better for you to perform every installations and updates (including the creation of the disk image with Ubuntu installation), using XEN for example and then just mount that disk image to launch bochs. Concretely, you should create a XEN’s VM in which you install Ubuntu and make all the necessary updates and installations, and then you fill in this image in ata0-master to use it with bochs.
+> **TIPS**: Because the emulation can be extremely slow, and also because an ethernet connection will most likely not always be available, it is better to perform every installations and updates (including the creation of the disk image with Ubuntu installation), using XEN for example) on your physical machine and then just mount that disk image to launch Bochs. Concretely, you should create a XEN’s VM in which you install Ubuntu and make all the necessary updates and installations, and then you fill in this image in ata0-master to use it with bochs.
 
 ### CPU 
 Look up for the line `CPU` in the config file.
@@ -72,9 +72,11 @@ Look up for the line `CPU` in the config file.
 You simply have to copy an already compiled XEN kernel from your physical host machine (xen-xx.gz), and the associated config file (xen-xx.config), into the /boot of the bochs host, because the compilation in emulation can take over 2 days and 2 nights! To perform the copy, think of using the mounted disk! Next perform an update-grub then a reboot (of course here we are in bochs). You will then be able to boot on XEN from bochs.
 
 ### Tools installation:
-You will need to install tools in the bochs host (previously we have only copied the XEN kernel, that has nothing to do with the tools which are compiled for the dom0). For the purpose, you will need to mount the XEN folder in bochs: make sure that the paths are exactly the same for the compilation. i.e. if in your physical host machine the compilation has been done using the path /mnt/path/... in the bochs host machine you should make sure to mount the XEN folder exactly in the same directory
-/mnt/path/... before performing the make install (in /mnt/path/.../xen/tools) ==> this operation may take some time (in terms of hours), be patient and keep your charger always connected!
+You will need to install tools in the bochs host (previously we have only copied the XEN kernel, that has nothing to do with the tools which are compiled for the dom0). To this end, you will need to mount the XEN folder in bochs: make sure that the paths are exactly the same for the compilation i.e. if in your physical host machine the compilation has been done using the path `/mnt/path/...`, in the bochs host machine XEN must be mounted exactly in the same directory `/mnt/path/...` before running `make install` (in `/mnt/path/.../xen/tools`) 
+> This operation may take some time (in terms of hours), be patient and keep your charger always connected!
 
-Finally make a ldconfig and xencommons start : you can now create virtual machines in bochs. As well, for the VM creation don’t forget the tip: create it in your physical host and reuse the disk image to start the VM in bochs!
+Finally make an `ldconfig` and `xencommons start`.
+You can now create virtual machines in Bochs. 
+> As well, for the VM creation don’t forget the **TIPS**: create it in your physical host and mount the disk image to start the VM in bochs!
 
 Good bochs to all!
