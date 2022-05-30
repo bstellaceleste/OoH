@@ -187,6 +187,70 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    ```
    * recompile boehm as previously explained and re-execute the applications from 3.).
 
+# Security
+
+To avoid side-channel that may be caused by tracked processes leveraging the ring buffer to interfere information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
+
+## Per-Process Ring Buffer
+This is only necessary when many trackers are running simultaneously.
+Otherwise, the second tracker can be launched once the first has terminated and removed the device.
+
+If 2 trackers however need to execute at the same time, you can can achieved per-processs ring buffer by creating another `/dev/uioX` device to be used by the following tracker process.
+When you first launch the uio_vtf module it creates the first uio device, in /dev named, **`/dev/uio0`**.
+To create the second one:
+1. Upadte `uio_vtf.c` (in /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0) like this:
+   ```
+   sed -i 's/uio_vtf_device/uio_vtf_device2/g' uio_vtf.c
+   sed -i 's/uio_vtf_driver/uio_vtf_driver2/g' uio_vtf.c
+   ```
+2. Create a new file for this new device:
+   `cp uio_vtf.c uio_vtf2.c`
+3. Update the Makefile
+   `sed -i 's/uio_vtf.o/uio_vtf.o uio_vtf2.o/g' Makefile`
+4. Recompile and insert the new device: `make && insmod uio_vtf2.ko`
+5. Check /dev/ (`ls /dev`): you should now see **uio1**
+
+Once this is done, you now need to update the tools for updating the uio device path -`UIO_DEVICE`- (add another one) which is currently statically filled in `xen-OoH/tools_VM/libxc/xc_domain.c`. And then recompile the tools: `cd xen-OoH/tools_VM/` and `sudo make && sudo make install`.
+
+## Ring Buffer Access Restriction
+We rely on Linux-`cgroups` to restrict access to /dev/uioX devices only to tracker processes.
+
+### Creating a New cgroup
+1. Install dependencies
+   `sudo apt update && sudo apt install cgroup-tools libcgroup1`
+2. Copy files to /etc
+   `sudo cp /usr/share/doc/cgroup-tools/examples/cgconfig.conf /etc/ && sudo cp /usr/share/doc/cgroup-tools/examples/cgred.conf /etc/`
+3. Edit /etc/cgconfig.conf
+   ```
+   group untrusted_uio {
+       devices {
+   #       Deny access to /dev/uioX
+           devices.deny="c 236:* mrw";
+       }
+   }
+
+   group trusted_uio0 {
+       devices {
+   #       Allow access to /dev/uio0
+           devices.allow="c 236:0 mrw";
+       }
+   }
+   ```
+   > The device number for `uio` is availale in the ls output: `ll /dev/uio0`
+   > ![cgroup](cgroup_dev.png)
+
+4. Load configs
+   `sudo cgconfigparser -l /etc/cgconfig.conf && sudo cgrulesengd`
+   
+### Set Applications Permissions
+Now that the process control groups are created, the VM proprietary should launch all applications in the `untrusted_uio` cgroup:
+`cgexec -g devices:untrusted_uio tracked` where `tracked` is the command line for the application to run.
+This way, none of *tracked* can access any /dev/uioX. They will get a `permission denied` error.
+
+Only the tracker can now be granted with access to /dev/uio devices:
+`cgexec -g devices:trusted_uio0 tracker`.
+
+> You can add in /etc/cgconfig.conf as many groups trusted_uioX as uio devices for each tracker.
 
 # Extended PML (EPML)
 
