@@ -189,7 +189,7 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
 
 # Security
 
-To avoid side-channel that may be caused by tracked processes leveraging the ring buffer to interfere information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
+To prevent side-channel attacks that may be caused by tracked processes leveraging the ring buffer to interfere information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
 
 ## Per-Process Ring Buffer
 This is only necessary when many trackers are running simultaneously.
@@ -258,6 +258,6 @@ The use of EPML is a bit more tricky since it should be emulated.
 
 We use to this end the [Bochs](https://sourceforge.net/projects/bochs/files/bochs/2.6.11/) emulator.
 
-You have a [bochs](bochs) folder in the downloaded repo. In the installation [procedure](bochs/README.md) you will find how to emulate an launch a host using Bochs.
+You have a [bochs](bochs) folder in the downloaded repo. In the installation [procedure](bochs/README.md) you will find how to emulate and launch a host using Bochs.
 
 Once the emulated host is launched, you can install Xen and create a virtual machine exactely as in the **SPML** Section, and follow the above guidelines to repeat the experiments.
