@@ -185,11 +185,11 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    //#         define PML_VDB
    //#       endif
    ```
-   * recompile boehm as previously explained and re-execute the applications from 3.).
+   * recompile boehm as previously explained and re-execute the applications from 3).
 
 # Security
 
-To prevent side-channel attacks that may be caused by tracked processes leveraging the ring buffer to interfere information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
+To prevent side-channel attacks that may be caused by tracked processes leveraging the ring buffer to infer information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
 
 ## Per-Process Ring Buffer
 This is only necessary when many trackers are running simultaneously.
