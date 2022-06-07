@@ -1,0 +1,110 @@
+***************./matrix_multiply 2000 2000*****************************
+
+--> observation period : 19s
+
+-----------------------------------1---------------------------
+Formula - Cp_before_start_frozen : 20240196.000000 ns
+Formula - reverse_mapping : 55561660.000000 ns
+Formula - time_imp : 87327254.000000 ns
+Formula - C_tker : 255956769.000000 ns
+Formula - C_p : 147931530.000000
+Formula - C_pml : 20697985.000000
+Formula - C_proc : 0.000000
+Formula - C_RevMap : 55561660.000000
+Formula - I : 87327254.000000
+Formula - time_Cproc_pipe_add_page : 0.000000 ns
+Formula - time_Cpml_pipe_add_page : 555818.000000
+Formula - time_Cproc_get_vma_map : 0.000000
+Formula - time_Cpml_get_vma_map : 1738782.000000
+Formula - time_Cproc_clear_refs : 0.000000
+
+spml_schedout : #events = 255  - total_time = 1504201 ns
+spml_schedin : #events = 255 - total_time = 156858 ns
+-----------------------------------2---------------------------
+Formula - Cp_before_start_frozen : 20235305.000000 ns
+Formula - reverse_mapping : 65777187.000000 ns
+Formula - time_imp : 97934755.000000 ns
+Formula - C_tker : 247852880.000000 ns
+Formula - C_p : 128567134.000000
+Formula - C_pml : 21350991.000000
+Formula - C_proc : 0.000000
+Formula - C_RevMap : 65777187.000000
+Formula - I : 97934755.000000
+Formula - time_Cproc_pipe_add_page : 0.000000 ns
+Formula - time_Cpml_pipe_add_page : 637119.000000
+Formula - time_Cproc_get_vma_map : 0.000000
+Formula - time_Cpml_get_vma_map : 1633711.000000
+Formula - time_Cproc_clear_refs : 0.000000
+
+Displaying dump stats:
+Freezing time: 329 us
+Frozen time: 209570 us
+Memory dump time: 102504 us
+Memory write time: 1577 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 15681 (0x3d41)
+Memory pages skipped from parent: 0 (0x0)
+Memory pages written: 553 (0x229)
+Lazy memory pages: 0 (0x0)
+
+spml_schedout : #events = 309  - total_time = 1308036 ns
+spml_schedin : #events = 309 - total_time = 182053 ns
+-----------------------------------3---------------------------
+Formula - Cp_before_start_frozen : 20234640.000000 ns
+Formula - reverse_mapping : 53508321.000000 ns
+Formula - time_imp : 93067329.000000 ns
+Formula - C_tker : 251772811.000000 ns
+Formula - C_p : 136776973.000000
+Formula - C_pml : 21928509.000000
+Formula - C_proc : 0.000000
+Formula - C_RevMap : 53508321.000000
+Formula - I : 93067329.000000
+Formula - time_Cproc_pipe_add_page : 0.000000 ns
+Formula - time_Cpml_pipe_add_page : 1286200.000000
+Formula - time_Cproc_get_vma_map : 0.000000
+Formula - time_Cpml_get_vma_map : 1694183.000000
+Formula - time_Cproc_clear_refs : 0.000000
+
+Displaying dump stats:
+Freezing time: 335 us
+Frozen time: 211683 us
+Memory dump time: 95364 us
+Memory write time: 3318 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 15681 (0x3d41)
+Memory pages skipped from parent: 0 (0x0)
+Memory pages written: 1118 (0x45e)
+Lazy memory pages: 0 (0x0)
+
+spml_schedout : #events = 261  - total_time = 1560247 ns
+spml_schedin : #events = 261 - total_time = 185347 ns
+-----------------------------------4---------------------------
+Formula - Cp_before_start_frozen : 20105580.000000 ns
+Formula - reverse_mapping : 62271374.000000 ns
+Formula - time_imp : 103952825.000000 ns
+Formula - C_tker : 271627939.000000 ns
+Formula - C_p : 144854211.000000
+Formula - C_pml : 22820903.000000
+Formula - C_proc : 0.000000
+Formula - C_RevMap : 62271374.000000
+Formula - I : 103952825.000000
+Formula - time_Cproc_pipe_add_page : 0.000000 ns
+Formula - time_Cpml_pipe_add_page : 1111163.000000
+Formula - time_Cproc_get_vma_map : 0.000000
+Formula - time_Cpml_get_vma_map : 1646895.000000
+Formula - time_Cproc_clear_refs : 0.000000
+
+Displaying dump stats:
+Freezing time: 353 us
+Frozen time: 230309 us
+Memory dump time: 104416 us
+Memory write time: 3010 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 15681 (0x3d41)
+Memory pages skipped from parent: 0 (0x0)
+Memory pages written: 1049 (0x419)
+Lazy memory pages: 0 (0x0)
+
+spml_schedout : #events = 609  - total_time = 1649828 ns
+spml_schedin : #events = 609 - total_time = 363428 n
+-----------------------------------5---------------------------

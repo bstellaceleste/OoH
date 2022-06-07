@@ -1,0 +1,132 @@
+**********************tkrzw_dbm_perf sequence --set_only --random_key --iter 5000000 --threads 2 --dbm stdtree***************
+
+---> observation period : 13s
+
+
+------------------------------------------1---------------------------------------------------
+Formula - Cp_before_start_frozen : 705598.000000 ns
+Formula - time_imp : 888271449.000000 ns
+Formula - C_tker : 3452141772.000000 ns
+Formula - C_p : 2553931627.000000
+Formula - C_pml : 0.000000
+Formula - C_proc : 9938696.000000
+Formula - C_RevMap : 0.000000
+Formula - I : 888271449.000000
+Formula - time_Cproc_pipe_add_page : 5988389.000000 ns
+Formula - time_Cpml_pipe_add_page : 0.000000
+Formula - time_Cproc_get_vma_map : 2618767.000000
+Formula - time_Cpml_get_vma_map : 0.000000
+Formula - time_Cproc_clear_refs : 1174484.000000
+
+Displaying dump stats:
+Freezing time: 141 us
+Frozen time: 3431604 us
+Memory dump time: 466609 us
+Memory write time: 435698 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 156830 (0x2649e)
+Memory pages skipped from parent: 70 (0x46)
+Memory pages written: 128716 (0x1f6cc)
+Lazy memory pages: 0 (0x0)
+------------------------------------------2---------------------------------------------------
+Formula - Cp_before_start_frozen : 826582.000000 ns
+Formula - time_imp : 1805665547.000000 ns
+Formula - C_tker : 3308307650.000000 ns
+Formula - C_p : 1494636375.000000
+Formula - C_pml : 0.000000
+Formula - C_proc : 8005728.000000
+Formula - C_RevMap : 0.000000
+Formula - I : 1805665547.000000
+Formula - time_Cproc_pipe_add_page : 4620784.000000 ns
+Formula - time_Cpml_pipe_add_page : 0.000000
+Formula - time_Cproc_get_vma_map : 2117682.000000
+Formula - time_Cpml_get_vma_map : 0.000000
+Formula - time_Cproc_clear_refs : 1141627.000000
+
+
+Displaying dump stats:
+Freezing time: 142 us
+Frozen time: 2913726 us
+Memory dump time: 492296 us
+Memory write time: 467105 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 169153 (0x294c1)
+Memory pages skipped from parent: 70 (0x46)
+Memory pages written: 124656 (0x1e6f0)
+Lazy memory pages: 0 (0x0)
+------------------------------------------3---------------------------------------------------
+Formula - Cp_before_start_frozen : 798323.000000 ns
+Formula - time_imp : 1104462327.000000 ns
+Formula - C_tker : 4788117908.000000 ns
+Formula - C_p : 3678117572.000000
+Formula - C_pml : 0.000000
+Formula - C_proc : 5538009.000000
+Formula - C_RevMap : 0.000000
+Formula - I : 1104462327.000000
+Formula - time_Cproc_pipe_add_page : 2702509.000000 ns
+Formula - time_Cpml_pipe_add_page : 0.000000
+Formula - time_Cproc_get_vma_map : 1568935.000000
+Formula - time_Cpml_get_vma_map : 0.000000
+Formula - time_Cproc_clear_refs : 1163013.000000
+
+
+Displaying dump stats:
+Freezing time: 2193 us
+Frozen time: 4467719 us
+Memory dump time: 763216 us
+Memory write time: 741258 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 183030 (0x2caf6)
+Memory pages skipped from parent: 70 (0x46)
+Memory pages written: 133785 (0x20a99)
+Lazy memory pages: 0 (0x0)
+------------------------------------------4---------------------------------------------------
+Formula - Cp_before_start_frozen : 938346.000000 ns
+Formula - time_imp : 2806187025.000000 ns
+Formula - C_tker : 4054232777.000000 ns
+Formula - C_p : 1146410266.000000
+Formula - C_pml : 0.000000
+Formula - C_proc : 101635486.000000
+Formula - C_RevMap : 0.000000
+Formula - I : 2806187025.000000
+Formula - time_Cproc_pipe_add_page : 6317636.000000 ns
+Formula - time_Cpml_pipe_add_page : 0.000000
+Formula - time_Cproc_get_vma_map : 2792487.000000
+Formula - time_Cpml_get_vma_map : 0.000000
+Formula - time_Cproc_clear_refs : 92405580.000000
+
+Displaying dump stats:
+Freezing time: 3295 us
+Frozen time: 4029079 us
+Memory dump time: 1838497 us
+Memory write time: 1714404 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 192554 (0x2f02a)
+Memory pages skipped from parent: 71 (0x47)
+Memory pages written: 154931 (0x25d33)
+Lazy memory pages: 0 (0x0)
+------------------------------------------5---------------------------------------------------
+Formula - Cp_before_start_frozen : 909849.000000 ns
+Formula - time_imp : 1337328200.000000 ns
+Formula - C_tker : 3684201976.000000 ns
+Formula - C_p : 2339059055.000000
+Formula - C_pml : 0.000000
+Formula - C_proc : 7814721.000000
+Formula - C_RevMap : 0.000000
+Formula - I : 1337328200.000000
+Formula - time_Cproc_pipe_add_page : 4335385.000000 ns
+Formula - time_Cpml_pipe_add_page : 0.000000
+Formula - time_Cproc_get_vma_map : 2191986.000000
+Formula - time_Cpml_get_vma_map : 0.000000
+Formula - time_Cproc_clear_refs : 1155275.000000
+
+Displaying dump stats:
+Freezing time: 141 us
+Frozen time: 3495533 us
+Memory dump time: 841350 us
+Memory write time: 815081 us
+IRMAP resolve time: 0 us
+Memory pages scanned: 159896 (0x27098)
+Memory pages skipped from parent: 71 (0x47)
+Memory pages written: 130410 (0x1fd6a)
+Lazy memory pages: 0 (0x0)

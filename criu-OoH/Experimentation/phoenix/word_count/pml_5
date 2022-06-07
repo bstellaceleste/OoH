@@ -1,0 +1,35 @@
+initialize: 2504
+library init: 138
+map phase: 28105783
+reduce phase: 1789143
+merge phase: 1
+library finalize: 2464
+inter library: 4
+library init: 2499
+map phase: 105941
+reduce phase: 1622169
+merge phase: 1
+library finalize: 445
+library: 31628698
+finalize: 6425
+Wordcount: Running...
+Wordcount: Calling MapReduce Scheduler Wordcount
+[Phoenix] num_map_tasks = 3214
+Wordcount: Completed 30
+Wordcount: MapReduce Completed
+Wordcount: Calling MapReduce Scheduler Sort
+[Phoenix] num_map_tasks = 31
+Wordcount: MapReduce Completed
+
+Wordcount: Results (TOP 10):
+            THE - 2230100
+             OF - 1230592
+            AND - 1090606
+             TO - 950358
+              A - 673512
+             IN - 655510
+           THAT - 579610
+             HE - 439304
+             IS - 415396
+             IT - 394968
+word-count took: 31637683 µs

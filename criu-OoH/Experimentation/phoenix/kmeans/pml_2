@@ -1,0 +1,24 @@
+initialize: 436395
+library init: 66
+map phase: 39382075
+reduce phase: 1651715
+merge phase: 1304
+library finalize: 29
+library init: 44
+map phase: 41258410
+reduce phase: 38031
+merge phase: 1221
+library finalize: 32
+library: 82332987
+inter library: 224
+finalize: 3971
+Dimension = 5000
+Number of clusters = 5000
+Number of points = 5000
+Size of each dimension = 100
+KMeans: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 1667
+[Phoenix] num_map_tasks = 1667
+
+KMeans: MapReduce Completed
+kmeans took: 82773608 µs

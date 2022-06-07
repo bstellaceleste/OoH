@@ -1,0 +1,18 @@
+***** file size is 16000000
+***** data size is 16000000
+initialize: 6270
+library init: 148
+MatrixMult: Side of the matrix is 2000
+MatrixMult: Row Block Len is 2000
+MatrixMult: Running...
+MatrixMult: Calling MapReduce Scheduler Matrix Multiplication
+map phase: 42168353
+reduce phase: 3010
+merge phase: 1
+library finalize: 394
+library: 42171939
+finalize: 2356
+[Phoenix] num_map_tasks = 2000
+MatrixMult: total sum is -1898901105
+MatrixMult: MapReduce Completed
+matrix-mult took: 42180576 µs

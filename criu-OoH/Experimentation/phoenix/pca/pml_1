@@ -1,0 +1,27 @@
+initialize: 87090
+library init: 72
+map phase: 4800
+reduce phase: 3742
+merge phase: 1
+library finalize: 377
+inter library: 2
+library init: 193
+map phase: 14816590
+reduce phase: 16748660
+merge phase: 3779497
+library finalize: 33665
+library: 35387703
+finalize: 161502
+Number of rows = 3000
+Number of cols = 3000
+Max value for each element = 200
+PCA Mean: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 600
+PCA Mean: MapReduce Completed
+PCA Cov: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 2250750
+PCA Cov: MapReduce Completed
+
+
+Covariance sum: 11160585
+pca took: 35636335 µs

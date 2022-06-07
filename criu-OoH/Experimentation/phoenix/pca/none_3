@@ -1,0 +1,13 @@
+Number of rows = 3000
+Number of cols = 3000
+Max value for each element = 200
+PCA Mean: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 600
+PCA Mean: MapReduce Completed
+PCA Cov: Calling MapReduce Scheduler
+[Phoenix] num_map_tasks = 2250750
+PCA Cov: MapReduce Completed
+
+
+Covariance sum: 11160585
+pca took: 19658996 µs

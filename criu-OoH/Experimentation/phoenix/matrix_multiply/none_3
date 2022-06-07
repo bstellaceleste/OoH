@@ -1,0 +1,8 @@
+MatrixMult: Side of the matrix is 2000
+MatrixMult: Row Block Len is 2000
+MatrixMult: Running...
+MatrixMult: Calling MapReduce Scheduler Matrix Multiplication
+[Phoenix] num_map_tasks = 2000
+MatrixMult: total sum is -1898901105
+MatrixMult: MapReduce Completed
+matrix-mult took: 38815016 µs

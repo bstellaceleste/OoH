@@ -1,0 +1,26 @@
+tiny
+--iter 5000000 --buckets 30000000 --threads 7 => elapsed_time=75.280048 qps=464931 mem=1274068000
+--iter 5000000 --buckets 30000000 --threads 5 => elapsed_time=39.251025 qps=636926 mem=977396000
+--iter 5000000 --buckets 30000000 --threads 3 => elapsed_time=18.410993 qps=814731 mem=681464000
+
+stdtree
+
+--iter 10000000 --threads 2  => elapsed_time=81.940087 qps=244081 mem=1383076000
+--iter 5000000 --threads 2   => elapsed_time=34.689076 qps=288275 mem=691712000
+--iter 3000000 --threads 2   => elapsed_time=17.983253 qps=333644 mem=415120000
+
+stdhash
+--iter 10000000 --buckets 100000 --record_comp zlib --threads 2 => elapsed_time=253.953697 qps=78755 mem=1188204000
+--iter 5000000 --buckets 100000 --record_comp zlib --threads 2 => elapsed_time=79.513780 qps=125764 mem=595884000
+--iter 3000000 --buckets 100000 --record_comp zlib --threads 2 => elapsed_time=26.222792 qps=228809 mem=358636000
+
+cache
+--iter 10000000 --cap_rec_num 10000000 --threads 5 => elapsed_time=132.188576 qps=378248 mem=721388000
+--iter 5000000 --cap_rec_num 5000000 --threads 5   => elapsed_time=56.790186 qps=440217 mem=362044000
+--iter 3000000 --cap_rec_num 3000000 --threads 5   => elapsed_time=32.917089 qps=455690 mem=218288000
+
+baby
+--iter 10000000 --threads 3 => elapsed_time=113.246902 qps=264908 mem=848564000
+--iter 5000000 --threads 3  => elapsed_time=60.011582 qps=249952 mem=429020000
+--iter 3000000 --threads 3  => elapsed_time=29.894090 qps=301063 mem=259412000
+
