@@ -1,0 +1,131 @@
+# large
+# First data block (index 0) -- gcbench
+# X   	Y
+  -0.23	6.0575
+  0.41	6.0575
+
+
+# Second index block (index 1) -- histogram
+# X   	Y
+  0.76	7.362127
+  1.41	7.362127
+
+
+# kmeans index 2
+# X   	Y
+  1.75	9.9741235
+  2.4	9.9741235
+
+
+# matrix_mult index 3
+# X   	Y
+  2.75	3.9198545
+  3.41	3.9198545
+
+
+# pca 
+# X   	Y
+#  3.75	4.398555
+#  4.41	4.398555
+
+
+# string_match index 4
+# X   	Y
+  3.75	.124283
+  4.41	.124283
+
+
+# word_count 5
+# X   	Y
+  4.75	1.769645
+  5.41	1.769645
+
+
+# medium
+# First data block (index 6) -- gcbench
+# X   	Y
+  -0.23	1.589
+  0.41	1.589
+
+
+# Second index block (index 7) -- histogram
+# X   	Y
+  0.75	2.203585
+  1.41	2.203585
+
+
+# kmeans index 8
+# X   	Y
+  1.75	.5913155
+  2.41	.5913155
+
+
+# matrix_mult index 9
+# X   	Y
+  2.75	.1569935
+  3.41	.1569935
+
+
+# pca
+# X   	Y
+#  3.75	.2301785
+#  4.41	.2301785
+
+
+# string_match index 10
+# X   	Y
+  3.75	.123837
+  4.4	.123837
+
+
+# word_count index 11
+# X   	Y
+  4.75	1.783822
+  5.4	1.783822
+
+
+# small
+# First data block (index 12) -- gcbench
+# X   	Y
+  -0.23	.355000
+  0.41	.355000
+
+
+# Second index block (index 13) -- histogram
+# X   	Y
+  0.75	.558122
+  1.41	.558122
+
+
+# kmeans index 14
+# X   	Y
+  1.75	.089.975
+  2.41	.089975
+
+
+# matrix_mult index 15
+# X   	Y 
+  2.75	.0447075
+  3.41	.0447075
+
+
+# pca
+# X   	Y
+#  3.75	.025437
+#  4.41	.025437
+
+
+# string_match index 16
+# X   	Y
+  3.75	.126168
+  4.41	.126168
+
+
+# word_count index 17
+# X   	Y
+  4.75	1.589904
+  5.41	1.589904
+
+
+
+

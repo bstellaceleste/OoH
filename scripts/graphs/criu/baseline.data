@@ -1,0 +1,115 @@
+# large
+# First data block (index 0) -- baby
+# X   	Y
+  -0.39	113.246902
+  0.395	113.246902
+
+
+# Second index block (index 1) -- cache
+# X   	Y
+  0.61	103.617
+  1.4	103.617
+
+
+# stdhash (index 2) 
+# X   	Y
+  1.61	254.047
+  2.4	254.047
+
+
+# stdtree (index 3)
+# X   	Y
+  2.61	63.646
+  3.4	63.646
+
+
+# tiny (index 4) 
+# X   	Y
+  3.61	59.552
+  4.4	59.552
+
+
+# medium (index 5) 
+# First data block (index 0) -- baby
+# X   	Y
+  -0.39	50.81552
+  0.395	50.81552
+
+
+# Second index block (index 6) -- cache
+# X   	Y
+  0.61	48.592825
+  1.4	48.592825
+
+
+# stdhash (index 7) 
+# X   	Y
+  1.61	63.845477
+  2.4	63.845477
+
+
+# stdtree (index 8) 
+# X   	Y
+  2.61	27.357811
+  3.4	27.357811
+
+
+# tiny (index 9) 
+# X   	Y
+  3.61	29.180203
+  4.4	29.180203
+
+
+# small (index 10) 
+# First data block (index 0) -- baby
+# X   	Y
+  -0.39	27.95237
+  0.395	27.95237
+
+
+# Second index block (index 11) -- cache
+# X   	Y
+  0.61	27.437268
+  1.4	27.437268
+
+
+# stdhash (index 12) 
+# X   	Y
+  1.61	24.114129
+  2.4	24.114129
+
+
+# stdtree (index 13) 
+# X   	Y
+  2.61	14.907393
+  3.4	14.907393
+
+
+# tiny (index 14) 
+# X   	Y
+  3.61	10.614214
+  4.4	10.614214
+
+
+# small (index 15) 
+# First data block (index 0) -- kmeans
+# X   	Y
+  -0.39	80.374276
+  0.395	80.374276
+
+
+# Second index block (index 16) -- matrix_mul
+# X   	Y
+#  0.61	38.846085
+#  1.4	38.846085
+# pca
+# X   	Y
+  0.61	19.667426
+  1.4	19.667426
+
+
+# wordcount (index 17) 
+# X   	Y
+  1.61	25.608445
+  2.4	25.608445
+
