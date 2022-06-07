@@ -13,7 +13,7 @@ This repo provides tools and guidelines for testing SPML and EPML implementation
 
 We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML (noted EPML). SPML requires no hardware modification, while EPML slightly extends the hardware for better performance. The following figure presents the architecture of the two solutions. In the guest, we provide OoH as a userspace I/O (UIO) driver composed of a kernel module (OoH Module) and a userspace library (OoH Lib). At load time, the former does a set of initialization operations, including ring buffer (RB) allocation that is shared with userspace (and the hypervisor in SMPL only). Tracker uses OoH Lib to register the PID of Tracked with OoH Module. From there on, the processor can log dirty pages’ addresses to a 512KB PML buffer, which is copied to RB once full. Relying on OoH Lib, Tracker can periodically fetch the collected addresses to achieve its goal (e.g., checkpointing). EPML differs from SPML in two ways: (1) With EPML, the processor also logs GVAs, thus avoiding costly reverse mapping in OhH Lib; (2) With EPML, the guest kernel can directly deal with the processor, thus avoiding costly hypercalls. 
 
-![design](design2.png)
+![design](scripts/design2.png)
 
 
 # Shadow PML (SPML)
@@ -74,14 +74,14 @@ To start the Xen deamon, type the following command: `sudo /etc/init.d/xencommon
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
 ### VM Creation
-A configuration [file](vm.cfg) is provided to create a VM using `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
+A configuration [file](scripts/vm.cfg) is provided to create a VM using `sudo xl create vm.cfg`. You must see `ooh` if you check for the list of VMs (`sudo xl li`).
 
 To access the VM, you need to create and configure a bridge:
 ```
 sudo brctl addbr xenbr0
 sudo ifconfig xenbr0 10.0.0.1
 ```
-To provide the VM with network access to the Internet, use the [routing](routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo ./routing.sh ethX`.
+To provide the VM with network access to the Internet, use the [routing](scripts/routing.sh) script in the repo. If your network interface is `ethX` for example, then use the script this way: `sudo ./routing.sh ethX`.
 
 ## Testing
 
@@ -187,6 +187,14 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    ```
    * recompile boehm as previously explained and re-execute the applications from 3).
 
+### Obtaining the Graphs
+In the [scripts](scripts/boehm) directory, you have all gnuplot scripts and data to plot the graphs in the paper.
+Data are collected at the end of experiments as described above and resumed in the appropriate format for gnuplot.
+For Tracker's results: `gnuplot boehm.gnu`.
+For Tracked: `gnuplot tracked.gnu`.
+All pdf outputs will be produced in the same dir.
+
+
 # Security
 
 To prevent side-channel attacks that may be caused by tracked processes leveraging the ring buffer to infer information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
@@ -237,7 +245,7 @@ We rely on Linux-`cgroups` to restrict access to /dev/uioX devices only to track
    }
    ```
    > The device number for `uio` is availale in the ls output: `ll /dev/uio0`
-   > ![cgroup](cgroup_dev.png)
+   > ![cgroup](scripts/cgroup_dev.png)
 
 4. Load configs
    `sudo cgconfigparser -l /etc/cgconfig.conf && sudo cgrulesengd`
