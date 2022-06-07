@@ -174,6 +174,7 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
      cd tests/word_count
      ./word_count dataset/word_100MB.txt
      ```
+All configurations used in the paper are listed in the Table in the AD.
 
 ### Comparison With `/proc`
 
