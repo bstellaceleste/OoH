@@ -188,7 +188,7 @@ Now that all datasets have been uncompressed, you can go back to the VM and run 
    * recompile boehm as previously explained and re-execute the applications from 3).
 
 ### Obtaining the Graphs
-In the [scripts](scripts/boehm) directory, you have all gnuplot scripts and data to plot the graphs in the paper.
+In the [scripts](scripts/graphs/boehm) directory, you have all gnuplot scripts and data to plot the graphs in the paper.
 Data are collected at the end of experiments as described above and resumed in the appropriate format for gnuplot.
 For Tracker's results: `gnuplot boehm.gnu`.
 For Tracked: `gnuplot tracked.gnu`.
