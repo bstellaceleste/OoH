@@ -53,7 +53,9 @@ To facilitate the tests, the following material is provided (and should be downl
    sudo apt install openssh-server openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
-4. Sources: Download:
+4. Sources: 
+  
+  You need to download:
    * [Linux](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=linux-OoH.zip) and the [zip file](https://github.com/bstellaceleste/Artifact-Eval/archive/refs/heads/SPML.zip) of the repo (containing Xen and Boehm) and uncompress them into **/mnt/tmp**. It is important that the root directory of your tests is **/mnt/tmp** because it is the path used to compile Linux and to write all the scripts and, since it is independent of the user's `$HOME` environment it allows easier portability and deployment.
    * The [VM image](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=vm.raw) into `/mnt/tmp/OoH`.
    * The [datasets](https://s3.console.aws.amazon.com/s3/object/artifacteval?region=us-east-2&prefix=datasets.zip) for the Phoenix applications.
