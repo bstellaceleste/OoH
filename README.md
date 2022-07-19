@@ -49,7 +49,7 @@ To facilitate the tests, the following material is provided (and should be downl
    ```
    sudo apt update
    sudo apt build-dep xen
-   sudo apt install libc6-dev libglib2.0-dev libyajl-dev yajl-tools libbz2-dev bison flex zlib1g-dev git-core debhelper debconf-utils debootstrap fakeroot gcc make binutils  liblz-dev  python-dev libncurses-dev libcurl4-openssl-dev libx11-dev uuid-dev libaio-dev pkg-config bridge-utils udev bison flex gettext bin86 bcc iasl gcc-multilib libperl-dev libgtk2.0-dev
+   sudo apt install lzma-dev libc6-dev libglib2.0-dev libyajl-dev yajl-tools libbz2-dev bison flex zlib1g-dev git-core debhelper debconf-utils debootstrap fakeroot gcc make binutils  liblz-dev  python-dev libncurses-dev libcurl4-openssl-dev libx11-dev uuid-dev libaio-dev pkg-config bridge-utils udev bison flex gettext bin86 bcc iasl gcc-multilib libperl-dev libgtk2.0-dev
    sudo apt install openssh-server openssh-client
    sudo apt install nfs-common nfs-kernel-server
    ```
@@ -70,6 +70,12 @@ ldconfig
 update-grub
 ```
 After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`).
+> If you face an issue while booting on xen (for example black screen), please follow this procedure to update the grub:
+> 1. Download the attached file `20_linux_xen.patch`
+> 2. Copy it to /etc/grub.d/: `sudo cp 20_linux_xen.patch /etc/grub.d`
+> 3. Make a backup of your original file and patch it *(you can first verify that the file 20_linux_xen is effectively present: ls /etc/grub.d/)*: `sudo cp 20_linux_xen 20_linux_xen.bk && sudo patch -c -i 20_linux_xen.patch`
+> 4. Reboot
+
 To start the Xen deamon, type the following command: `sudo /etc/init.d/xencommons start`.
 To verify, you can check either for the Xen info `sudo xl info` or the list of VMs `sudo xl li`.
 
@@ -196,7 +202,7 @@ For Tracked: `gnuplot tracked.gnu`.
 All pdf outputs will be produced in the same dir.
 
 
-# Security
+# Security (Optional)
 
 To prevent side-channel attacks that may be caused by tracked processes leveraging the ring buffer to infer information on other processes, you can dedicate a per-process ring buffer and restrict its access to tracker processes only.
 
