@@ -1,0 +1,35 @@
+diff --git ./20_linux_xen ./20_linux_xen
+index c48af94..7aae59f 100644
+--- ./20_linux_xen
++++ ./20_linux_xen
+@@ -85,6 +85,10 @@ linux_entry ()
+   type="$4"
+   args="$5"
+   xen_args="$6"
++  ver=""
++  if $($grub_file --is-x86-multiboot2 ${xen_dirname}/${xen_basename}); then
++     ver="2"
++  fi
+   if [ -z "$boot_device_id" ]; then
+       boot_device_id="$(grub_get_device_id "${GRUB_DEVICE}")"
+   fi
+@@ -122,16 +126,16 @@ linux_entry ()
+         else
+             xen_rm_opts="no-real-mode edd=off"
+         fi
+-	multiboot	${rel_xen_dirname}/${xen_basename} placeholder ${xen_args} \${xen_rm_opts}
++	multiboot${ver}	${rel_xen_dirname}/${xen_basename} placeholder ${xen_args} \${xen_rm_opts}
+ 	echo	'$(echo "$lmessage" | grub_quote)'
+-	module	${rel_dirname}/${basename} placeholder root=${linux_root_device_thisversion} ro ${args}
++	module${ver}	${rel_dirname}/${basename} placeholder root=${linux_root_device_thisversion} ro ${args}
+ EOF
+   if test -n "${initrd}" ; then
+     # TRANSLATORS: ramdisk isn't identifier. Should be translated.
+     message="$(gettext_printf "Loading initial ramdisk ...")"
+     sed "s/^/$submenu_indentation/" << EOF
+ 	echo	'$(echo "$message" | grub_quote)'
+-	module	--nounzip   ${rel_dirname}/${initrd}
++	module${ver}	--nounzip   ${rel_dirname}/${initrd}
+ EOF
+   fi
+   sed "s/^/$submenu_indentation/" << EOF
