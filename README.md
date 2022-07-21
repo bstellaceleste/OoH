@@ -73,7 +73,7 @@ update-grub
 ```
 After this, reboot on Xen (select in the grub `Ubuntu with Xen hypervisor`).
 > If you face an issue while booting on xen (for example black screen), please follow this procedure to update the grub:
-> 1. Download the attached file `20_linux_xen.patch`
+> 1. Download the file [20_linux_xen.patch](xen-OoH/20_linux_xen.patch)
 > 2. Copy it to /etc/grub.d/: `sudo cp 20_linux_xen.patch /etc/grub.d`
 > 3. Make a backup of your original file and patch it *(you can first verify that the file 20_linux_xen is effectively present: ls /etc/grub.d/)*: `sudo cp 20_linux_xen 20_linux_xen.bk && sudo patch -c -i 20_linux_xen.patch`
 > 4. Reboot
