@@ -214,10 +214,10 @@ To prevent side-channel attacks that may be caused by tracked processes leveragi
 This is only necessary when many trackers are running simultaneously.
 Otherwise, the second tracker can be launched once the first has terminated and removed the device.
 
-If 2 trackers however need to execute at the same time, you can can achieved per-processs ring buffer by creating another `/dev/uioX` device to be used by the following tracker process.
-When you first launch the uio_vtf module it creates the first uio device, in /dev named, **`/dev/uio0`**.
+If 2 trackers, however, need to execute at the same time, you can opt for a per-processs ring buffer by creating another `/dev/uioX` device and dedicate it to the following tracker process.
+When you first launch the uio_vtf module, it creates the first uio device, in /dev, named **`/dev/uio0`**.
 To create the second one:
-1. Upadte `uio_vtf.c` (in /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0) like this:
+1. Update `uio_vtf.c` (in /mnt/tmp/linux-4.15-rc7/vtf-uio_vS0) like this:
    ```
    sed -i 's/uio_vtf_device/uio_vtf_device2/g' uio_vtf.c
    sed -i 's/uio_vtf_driver/uio_vtf_driver2/g' uio_vtf.c
