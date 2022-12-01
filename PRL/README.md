@@ -10,4 +10,4 @@ The following figure illustrates the PRL functioning.
 <!-- ![design](prl.png) -->
 <img src="prl.png" alt="design" width="50%"/>
 
-All graphs of the work can be found in the [figures](figures) folder and [here](results-scripts/accuracy/) some scripts to generate them.
+All graphs of the work can be found in the [figures](figures) folder, and [here](results-scripts/accuracy/) are some scripts to generate them.
