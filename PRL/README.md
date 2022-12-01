@@ -5,6 +5,6 @@ To this end, we first conduct a study of PML with the Xen hypervisor to investig
 Based on the aforementioned findings, we introduce page reference logging (PRL), an extended version of PML that allows both read and write memory accesses to be tracked without impacting user VMs, thus more suitable for WSS estimation. We propose a WSS estimation system that leverages PRL and show how it can be used in a data center exploiting memory overcommitment. We implement PRL and the underlying WSS estimation system under Gem5, a popular open-source computer architecture simulator. Evaluation results validate the accuracy of the WSS estimation system and show that PRL does not incur more performance degradation on user’s VMs.
 
 <!-- ![design](prl.png) -->
-<img src="prl.jpg" alt="design" width="50%"/>
+<img src="prl.png" alt="design" width="50%"/>
 
 All graphs of the work can be found in the [figures](figures) folder and [here](results-scripts/accuracy/) some scripts to generate them.
