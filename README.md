@@ -8,7 +8,7 @@ OoH can be implemented for both unprivileged and privileged VMs (respectively, d
 ## OoH in domO: PRL
 PRL is the OoH implementation of PML for working set size estimation of VMs.
 It is published at [VEE'21](https://dl.acm.org/doi/pdf/10.1145/3453933.3454018) ([slides](https://www.youtube.com/watch?v=nKFJtmjo_fU)).
-Some artifacts are available [here](prl).
+Some artifacts are available [here](PRL).
 
 
 ## OoH in domU
