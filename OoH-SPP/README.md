@@ -5,4 +5,4 @@ For virtualized cloud applications, this paper introduces GuaNary, a novel defen
 The following figure presents the design of LeanGuard.
 
 <!-- ![design](leanguard.png) -->
-<div style="text-align:center"><img src="leanguard.png" alt="design" width="50%" align=center/></div>
+<img src="leanguard.png" alt="design" width="50%" align="center"/>
