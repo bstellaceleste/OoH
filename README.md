@@ -15,7 +15,7 @@ Some artifacts are available [here](PRL).
 
 ### OoH for PML
 This is the OoH implementation of PML in domU for dirty page tracking applied to process checkpointing (with CRIU) and concurrent garbage collection (with Boehm GC).
-It is published at [SC'22](OoH-PML/ooh.pdf) ([slides](OoH-PML/prez.pdf)).
+It is published at [SC'22](https://bit.ly/3uiYgqd) ([slides](OoH-PML/prez.pdf)).
 The code open-sourced [here](OoH-PML).
 
 ### OoH for SPP
