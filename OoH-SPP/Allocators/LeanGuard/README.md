@@ -1,5 +1,5 @@
-## LeanGuard: A Secure and Memory-Efficient Heap Allocator based on XXX (will be displayed after the work is no more under submission)
-<--XX is for GuaNary--!>
+## XXX: A Secure and Memory-Efficient Heap Allocator based on YYY (will be displayed after the work is no more under submission)
+<--XXX is for LeanGuard and YYY for GuaNary--!>
 
 LeanGuard is based on SlimGuard, and defines a new placement policy for XXX and guard pages.
 
