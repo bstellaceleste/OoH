@@ -1,0 +1,42 @@
+Bochs basic: version basique de bochs (disponible en ligne)
+- Implementation de la table SPP et du parcours de cette table lors des accès en écriture (spp_walk)
+Note:
+Lors d'un accès en écriture, s'il y a TLB Miss, le materiel parcours la table SPP si besoin (spp_walk) et vérifie les droits d'accès de la subpage à l'aide de sa bitmap.
+Si la subpage est inaccessible, une exception est levée.
+Sinon, l'écriture est donc valide et la page est ajoutée dans la TLB et accessible complètment en écriture (isWriteOK() dans les fonction d'ecriture write_linear_xxx())
+Les prochaines écritures, s'il y a TLB Hit, seront automatiquement acceptés et faites, ce qui est un probleme si l'une d'entre elles (écritures) accède à une subpage inaccessible.
+
+
+Bochs Intermediate
+- Reprend la version basique en s'assurant que toutes les écritures soient correctement vérifiées.
+Note:
+Lors d'un accès en écriture, s'il y a TLB Miss, le materiel parcours la table SPP si besoin (spp_walk) et vérifie les droits d'accès de la subpage à l'aide de sa bitmap.
+Si la subpage est inaccessible, une exception est levée.
+Sinon, l'écriture est valide mais la page n'est pas ajoutée dans la TLB forcant ainsi la vérification des autres accès en écriture (spp_walk).
+
+
+
+
+
+Bochs main
+- Modification de la TLB pour coller au mieux au comportement voulu
+Note:
+Lors d'un accès en écriture, s'il y a TLB Miss, le materiel parcours la table SPP si besoin (spp_walk) et vérifie les droits d'accès de la subpage à l'aide de sa bitmap.
+Si la subpage est inaccessible, une exception est levée.
+Sinon, l'ecriture est valide et la page est ajoutée a la TLB ainsi que sa bitmap (champ spp_bitmap de la structure bx_TLB_entry).
+Les prochaines écritures, s'il y a TLB Hit (voir les fonction type write_linear_xxx()), pourront être vérifiée à l'aide de la bitmap.
+
+Modification apportées:
+ - Structure d'une entrée de la TLB
+struct bx_TLB_entry
+{
+	bx_address lpf;			// page virtuelle de l'entrée, lors d'un accès (ecriture ou lecture) on cherche l'entrée qui a son champ lpf == request_address
+	
+	Bit64u spp_bitmap;		// bitmap SPP de la page physique
+.
+.
+.
+}
+
+ - Ajout d'un flag
+TLB_UserSPP: il permet d'indiquer si une entrée de la TLB correspond a une page SPP et donc de vérifier l'adresse de l'écriture.

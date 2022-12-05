@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.streamcluster - [Nothing to do]
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh streamcluster':
+
+ 1,340,894,059,556      cycles                                                        (71.42%)
+ 1,057,091,064,707      instructions              #    0.79  insn per cycle           (85.72%)
+    46,364,947,367      cache-misses                                                  (85.73%)
+     1,545,710,773      dTLB-load-misses                                              (85.71%)
+     2,289,062,949      dtlb_load_misses.stlb_hit                                     (85.71%)
+    45,196,885,421      branch-loads                                                  (85.73%)
+       198,733,396      branch-loads-misses                                           (57.13%)
+
+     388.420049504 seconds time elapsed
+
+     387.831605000 seconds user
+       0.531446000 seconds sys
+
+

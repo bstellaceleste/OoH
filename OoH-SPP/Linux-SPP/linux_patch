@@ -1,0 +1,1064 @@
+diff -ur ./arch/x86/kernel/traps.c ./arch/x86/kernel/traps.c
+--- ./arch/x86/kernel/traps.c	2021-09-14 13:33:36.431112550 +0200
++++ ./arch/x86/kernel/traps.c	2021-09-15 11:54:05.481294176 +0200
+@@ -62,6 +62,10 @@
+ #include <asm/insn-eval.h>
+ #include <asm/vdso.h>
+ 
++#include <xen/interface/xen.h>
++#include <xen/hvm.h>
++
++
+ #ifdef CONFIG_X86_64
+ #include <asm/x86_init.h>
+ #include <asm/proto.h>
+@@ -157,7 +161,6 @@
+ 	long error_code, int sicode, void __user *addr)
+ {
+ 	struct task_struct *tsk = current;
+-
+ 	if (!do_trap_no_signal(tsk, trapnr, str, regs, error_code))
+ 		return;
+ 
+@@ -925,7 +928,10 @@
+ 					   unsigned long dr6)
+ {
+ 	bool icebp;
+-
++	/* SPP natif */
++	regs->flags &= ~X86_EFLAGS_TF;
++	HYPERVISOR_hvm_op(33, NULL);
++	return;
+ 	/*
+ 	 * If something gets miswired and we end up here for a kernel mode
+ 	 * #DB, we will malfunction.
+diff -ur ./arch/x86/mm/init_64.c ./arch/x86/mm/init_64.c
+--- ./arch/x86/mm/init_64.c	2021-09-14 13:33:36.443112515 +0200
++++ ./arch/x86/mm/init_64.c	2021-06-26 14:13:34.712009121 +0200
+@@ -34,6 +34,9 @@
+ #include <linux/gfp.h>
+ #include <linux/kcore.h>
+ 
++#include <linux/mm.h>
++
++
+ #include <asm/processor.h>
+ #include <asm/bios_ebda.h>
+ #include <linux/uaccess.h>
+@@ -810,6 +813,7 @@
+ }
+ #endif
+ 
++
+ void __init paging_init(void)
+ {
+ 	sparse_init();
+@@ -824,6 +828,7 @@
+ 	node_clear_state(0, N_NORMAL_MEMORY);
+ 
+ 	zone_sizes_init();
++
+ }
+ 
+diff -ur ./arch/x86/mm/init.c ./arch/x86/mm/init.c
+--- ./arch/x86/mm/init.c	2021-09-14 13:33:36.443112515 +0200
++++ ./arch/x86/mm/init.c	2021-06-26 13:58:20.363760458 +0200
+@@ -27,6 +27,8 @@
+ #include <asm/text-patching.h>
+ #include <asm/memtype.h>
+ 
++
++
+ /*
+  * We need to define the tracepoints somewhere, and tlb.c
+  * is only compied when SMP=y.
+@@ -988,6 +990,7 @@
+ #endif
+ }
+ 
++
+ void __init zone_sizes_init(void)
+ {
+ 	unsigned long max_zone_pfns[MAX_NR_ZONES];
+
+diff -ur ./include/linux/mm.h ./include/linux/mm.h
+--- ./include/linux/mm.h	2021-09-14 13:33:38.935105133 +0200
++++ ./include/linux/mm.h	2021-07-27 11:50:00.381287975 +0200
+@@ -42,6 +42,36 @@
+ struct bdi_writeback;
+ struct pt_regs;
+ 
++/* Implementation S0-POOL */
++#define NB_POOL 5
++#define NB_PAGES_SPP 500
++
++typedef struct spp_pool {
++	bool is_init;
++	int freq;			/* frequence de subpage du pool				*/
++	int idx_alloc;		/* index de la derniere page allouée 		*/
++	int idx_free;		/* index de la derniere page libérée 		*/
++	int nb_pages;		/* nombre de pages disponible dans le pool 	*/
++	struct mutex mtx;
++	uint64_t tab[NB_PAGES_SPP];
++} spp_pool_t;
++
++/* freq:
++0 => 1/2
++1 => 1/4
++2 => 1/8
++3 => 1/16
++*/
++
++extern spp_pool_t spp_pools[NB_POOL];
++
++extern int spp_pools_init(void);
++extern struct page *spp_get_page(int freq);
++extern int spp_put_page(struct page *page, int freq);
++extern void print_pool(void);
++/* Implementation S0-POOL */
++
++
+ extern int sysctl_page_lock_unfairness;
+ 
+ void init_mm_internals(void);
+@@ -319,6 +349,8 @@
+ #define VM_HIGH_ARCH_4	BIT(VM_HIGH_ARCH_BIT_4)
+ #endif /* CONFIG_ARCH_USES_HIGH_VMA_FLAGS */
+ 
++#define SPP_VMA_FLAG BIT(60)
++
+ #ifdef CONFIG_ARCH_HAS_PKEYS
+ # define VM_PKEY_SHIFT	VM_HIGH_ARCH_BIT_0
+ # define VM_PKEY_BIT0	VM_HIGH_ARCH_0	/* A protection key is a 4-bit value */
+@@ -1195,6 +1227,7 @@
+ {
+ 	page = compound_head(page);
+ 
++
+ 	/*
+ 	 * For devmap managed pages we need to catch refcount transition from
+ 	 * 2 to 1, when refcount reach one it means the page is free and we
+diff -ur ./include/linux/mm_types.h ./include/linux/mm_types.h
+--- ./include/linux/mm_types.h	2021-09-14 13:33:38.935105133 +0200
++++ ./include/linux/mm_types.h	2021-07-12 10:42:15.830382727 +0200
+@@ -370,6 +370,8 @@
+ 	struct mempolicy *vm_policy;	/* NUMA policy for the VMA */
+ #endif
+ 	struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
++	int spp_freq;
++	bool spp;
+ } __randomize_layout;
+ 
+ struct core_thread {
+@@ -404,6 +406,8 @@
+ 		unsigned long task_size;	/* size of task vm space */
+ 		unsigned long highest_vm_end;	/* highest vma end address */
+ 		pgd_t * pgd;
++		/*** Guest Subpage Permission ***/
++		pgd_t *pgd_spp;
+ 
+ #ifdef CONFIG_MEMBARRIER
+ 		/**
+diff -ur ./include/linux/mmzone.h ./include/linux/mmzone.h
+--- ./include/linux/mmzone.h	2021-09-14 13:33:38.939105120 +0200
++++ ./include/linux/mmzone.h	2021-06-25 15:13:34.620283923 +0200
+@@ -345,6 +345,7 @@
+ 
+ #endif /* !__GENERATING_BOUNDS.H */
+ 
++
+ enum zone_type {
+ 	/*
+ 	 * ZONE_DMA and ZONE_DMA32 are used when there are peripherals not able
+diff -ur ./include/linux/sched.h ./include/linux/sched.h
+--- ./include/linux/sched.h	2021-09-14 13:33:38.963105050 +0200
++++ ./include/linux/sched.h	2021-07-06 12:20:28.213571099 +0200
+@@ -649,18 +649,6 @@
+ #endif
+ };
+ 
+-/** Implementation S0 **/
+-struct spp_pfn {
+-        uint64_t 		pfn;
+-		struct page 	*page;
+-        struct spp_pfn 	*next;
+-};
+-
+-/** Implementation S0 **/
+-struct spp_pfn_state {
+-	unsigned int	flag;
+-	struct spp_pfn *head;
+-};
+ 
+ struct task_struct {
+ #ifdef CONFIG_THREAD_INFO_IN_TASK
+@@ -673,12 +661,6 @@
+ 	/* -1 unrunnable, 0 runnable, >0 stopped: */
+ 	volatile long			state;
+ 
+-	/** Implementation S0 **/
+-	struct spp_pfn_state			*spp_state;
+-
+-
+-
+-	unsigned long *gspp_table;
+ 	/*
+ 	 * This begins the randomizable portion of task_struct. Only
+ 	 * scheduling-critical items should be added above here.
+diff -ur ./include/linux/vmstat.h ./include/linux/vmstat.h
+--- ./include/linux/vmstat.h	2021-09-14 13:33:38.983104990 +0200
++++ ./include/linux/vmstat.h	2021-06-18 15:14:03.948614227 +0200
+@@ -132,7 +132,7 @@
+ #endif
+ 
+ #define __count_zid_vm_events(item, zid, delta) \
+-	__count_vm_events(item##_NORMAL - ZONE_NORMAL + zid, delta)
++	__count_vm_events(item##_NORMAL -  + zid, delta)
+ 
+ /*
+  * Zone and node-based page accounting with per cpu differentials.
+diff -ur ./include/uapi/asm-generic/mman-common.h ./include/uapi/asm-generic/mman-common.h
+--- ./include/uapi/asm-generic/mman-common.h	2021-09-14 13:33:39.023104872 +0200
++++ ./include/uapi/asm-generic/mman-common.h	2021-07-22 10:52:48.590727425 +0200
+@@ -72,6 +72,13 @@
+ #define MADV_COLD	20		/* deactivate these pages */
+ #define MADV_PAGEOUT	21		/* reclaim these pages */
+ 
++#define MADV_SPP2 	22
++#define MADV_SPP4 	23
++#define MADV_SPP8 	24
++#define MADV_SPP16 	25
++#define MADV_SPP32 	26
++
++
+ /* compatibility flags */
+ #define MAP_FILE	0
+ 
+diff -ur ./kernel/fork.c ./kernel/fork.c
+--- ./kernel/fork.c	2021-09-14 13:33:39.075104717 +0200
++++ ./kernel/fork.c	2021-07-06 13:11:29.773554662 +0200
+@@ -654,8 +654,8 @@
+ 		long x = atomic_long_read(&mm->rss_stat.count[i]);
+ 
+ 		if (unlikely(x))
+-			pr_alert("BUG: Bad rss-counter state mm:%p type:%s val:%ld\n",
+-				 mm, resident_page_types[i], x);
++			pr_alert("BUG: Bad rss-counter state mm:%p type:%s val:%ld pid %d\n",
++				 mm, resident_page_types[i], x, current->pid);
+ 	}
+ 
+ 	if (mm_pgtables_bytes(mm))
+@@ -1960,12 +1960,7 @@
+ 	 * Clear TID on mm_release()?
+ 	 */
+ 	p->clear_child_tid = (clone_flags & CLONE_CHILD_CLEARTID) ? args->child_tid : NULL;
+-	if(current->spp_state) {
+-		current->spp_state->flag = SPP_SHARED;
+-		p->spp_state = current->spp_state;
+-		printk("SPP: the spp_pfn_state is now shared\n");
+-	}
+-
++	
+ 	ftrace_graph_init_task(p);
+ 
+ 	rt_mutex_init_task(p);
+diff -ur ./mm/madvise.c ./mm/madvise.c
+--- ./mm/madvise.c	2021-09-14 13:33:39.155104480 +0200
++++ ./mm/madvise.c	2021-07-28 12:37:37.017933591 +0200
+@@ -922,6 +922,7 @@
+ madvise_vma(struct vm_area_struct *vma, struct vm_area_struct **prev,
+ 		unsigned long start, unsigned long end, int behavior)
+ {
++	struct vm_area_struct *tmp = *prev;
+ 	switch (behavior) {
+ 	case MADV_REMOVE:
+ 		return madvise_remove(vma, prev, start, end);
+@@ -934,6 +935,31 @@
+ 	case MADV_FREE:
+ 	case MADV_DONTNEED:
+ 		return madvise_dontneed_free(vma, prev, start, end, behavior);
++	case MADV_SPP2:
++		vma->spp_freq = 0;
++		vma->spp = true;
++		printk("SPP: madvise_vma(): vma->start %lx vma->end %lx spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		return 1;
++	case MADV_SPP4:
++		vma->spp_freq = 1;
++		vma->spp = true;
++		printk("SPP: madvise_vma(): vma->start %lx vma->end %lx spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		return 1;
++	case MADV_SPP8:
++		vma->spp_freq = 2;
++		vma->spp = true;
++		printk("SPP: madvise_vma(): vma->start %lx vma->end %lx spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		return 1;
++	case MADV_SPP16:
++		vma->spp_freq = 3;
++		vma->spp = true;
++		printk("SPP: madvise_vma(): vma->start %lx vma->end %lx spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		return 1;
++	case MADV_SPP32:
++		vma->spp_freq = 4;
++		vma->spp = true;
++		printk("SPP: madvise_vma(): vma->start %lx vma->end %lx spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		return 1;
+ 	default:
+ 		return madvise_behavior(vma, prev, start, end, behavior);
+ 	}
+@@ -954,6 +980,11 @@
+ 	case MADV_FREE:
+ 	case MADV_COLD:
+ 	case MADV_PAGEOUT:
++	case MADV_SPP2:
++	case MADV_SPP4:
++	case MADV_SPP8:
++	case MADV_SPP16:
++	case MADV_SPP32:
+ #ifdef CONFIG_KSM
+ 	case MADV_MERGEABLE:
+ 	case MADV_UNMERGEABLE:
+@@ -1064,7 +1095,7 @@
+ 	int write;
+ 	size_t len;
+ 	struct blk_plug plug;
+-
++printk("madvise(): start %lx\n", start);
+ 	start = untagged_addr(start);
+ 
+ 	if (!madvise_behavior_valid(behavior))
+diff -ur ./mm/memory.c ./mm/memory.c
+--- ./mm/memory.c	2021-09-14 13:33:39.155104480 +0200
++++ ./mm/memory.c	2021-08-17 11:58:29.966843348 +0200
+@@ -105,6 +105,120 @@
+ EXPORT_SYMBOL(mem_map);
+ #endif
+ 
++/* Implementation S0-POOL */
++spp_pool_t spp_pools[NB_POOL];
++EXPORT_SYMBOL_GPL(spp_pools);
++
++bool spp_single_pool_init(spp_pool_t *pool) {
++	int i = 0;
++	struct page *page;
++	memset(pool->tab, '0', sizeof(struct page*)*NB_PAGES_SPP);
++
++	for(i = 0; i < NB_PAGES_SPP; i++) {
++		page = alloc_pages(GFP_HIGHUSER_MOVABLE, 0);
++		if(!page)
++			return false;
++		__SetPageUptodate(page);
++		set_bit(PG_spp, &(page->flags));
++		pool->tab[i] = page_to_pfn(page);
++	}
++	
++	HYPERVISOR_hvm_op(28+pool->freq, &pool->tab);
++	return true;
++}
++
++void spp_pool_setup(int i) {
++	spp_pools[i].is_init = true,
++	spp_pools[i].freq = i;
++	spp_pools[i].idx_alloc = 0;
++	spp_pools[i].idx_free = 0;
++	spp_pools[i].nb_pages = NB_PAGES_SPP;
++}
++
++int spp_pools_init(void) {
++	int i = 0;
++
++	for(i = 0; i < NB_POOL; i++) {
++		spp_pool_setup(i);
++		if (!spp_single_pool_init(&spp_pools[i]))
++			goto out;
++		mutex_init(&spp_pools[i].mtx);
++	}
++	return 0;
++out:
++	return -1;
++}
++EXPORT_SYMBOL_GPL(spp_pools_init);
++
++struct page *spp_get_page(int freq) {
++	spp_pool_t *pool = &spp_pools[freq];
++
++	mutex_lock(&(pool->mtx));
++	if (!pool->is_init) return NULL;
++	unsigned long page = 0;
++	int i = 0;
++
++	if (pool->nb_pages <= 0 ) {
++		printk("SPP: spp_put_page(): pool %d empty \n", freq);
++		goto unlock;
++	}
++
++	while ((i < NB_PAGES_SPP) && (page == 0)) {
++		if (pool->tab[i] != 0)
++			page = pool->tab[i];
++		i++;
++	}
++
++	pool->tab[i-1] = 0;
++	pool->nb_pages--;
++	printk("SPP: get_spp_page(): idx %d, freq %d, pfn %lx\n", i-1, freq, page);
++
++unlock:
++	mutex_unlock(&(pool->mtx));
++	return pfn_to_page(page);
++}
++EXPORT_SYMBOL_GPL(spp_get_page);
++
++int spp_put_page(struct page *page, int freq) {
++	spp_pool_t *pool = &spp_pools[freq];
++
++	mutex_lock(&(pool->mtx));
++	int ret = -1;
++	int i = 0;
++
++	if ((!pool->is_init) || (pool->nb_pages >= NB_PAGES_SPP)) {
++		printk("SPP: spp_put_page(): pool %d full \n", freq);
++		goto unlock;
++	}
++
++	while((i < NB_PAGES_SPP) && (pool->tab[i] != 0)) {
++		i++;
++	}
++	if (i == NB_PAGES_SPP)
++		goto unlock;
++
++	ret = 0;
++	pool->tab[i] = page_to_pfn(page);
++	pool->nb_pages++;
++	printk("SPP: put_spp_page(): idx %d, freq %d, pfn %lx\n", i, freq, page_to_pfn(page));
++
++unlock:
++	mutex_unlock(&(pool->mtx));
++	return ret;
++}
++EXPORT_SYMBOL_GPL(spp_put_page);
++
++void print_pool(void) {
++
++	int i = 0, j = 0;
++	for(i = 0; i < NB_POOL; i++) {
++		printk("\nSPP: POOL %d\n", i);
++		for(j = 0; j < NB_PAGES_SPP; j++) {
++			printk("tab[%d]: %lx\n", j, spp_pools[i].tab[j]);
++		}
++	}
++}
++EXPORT_SYMBOL_GPL(print_pool);
+ /*
+  * A number of key systems in x86 including ioremap() rely on the assumption
+  * that high_memory defines the upper bound on direct map memory, then end
+@@ -1241,6 +1355,7 @@
+ 			struct page *page;
+ 
+ 			page = vm_normal_page(vma, addr, ptent);
++			
+ 			if (unlikely(details) && page) {
+ 				/*
+ 				 * unmap_shared_mapping_pages() wants to
+@@ -1268,6 +1383,8 @@
+ 			}
+ 			rss[mm_counter(page)]--;
+ 			page_remove_rmap(page, false);
++			if (test_bit(PG_spp, &page->flags))
++				spp_put_page(page, vma->spp_freq);
+ 			if (unlikely(page_mapcount(page) < 0))
+ 				print_bad_pte(vma, addr, ptent, page);
+ 			if (unlikely(__tlb_remove_page(tlb, page))) {
+@@ -1294,7 +1411,7 @@
+ 			}
+ 
+ 			pte_clear_not_present_full(mm, addr, pte, tlb->fullmm);
+-			rss[mm_counter(page)]--;
++			rss[mm_counter(page)]--;			
+ 			page_remove_rmap(page, false);
+ 			put_page(page);
+ 			continue;
+@@ -1434,7 +1551,10 @@
+ {
+ 	pgd_t *pgd;
+ 	unsigned long next;
+-
++/*	if (vma->spp) {
++		printk("SPP: unmap_page_range(): vma_start %lx vma_end %lx spp %d\n", vma->vm_start, vma->vm_end, vma->spp);
++	}
++	*/
+ 	BUG_ON(addr >= end);
+ 	tlb_start_vma(tlb, vma);
+ 	pgd = pgd_offset(vma->vm_mm, addr);
+@@ -1455,7 +1575,11 @@
+ {
+ 	unsigned long start = max(vma->vm_start, start_addr);
+ 	unsigned long end;
+-
++/*
++	if (vma->spp) {
++		printk("SPP: unmap_single_vma(): vma_start %lx vma_end %lx spp %d\n", vma->vm_start, vma->vm_end, vma->spp);
++	}
++	*/
+ 	if (start >= vma->vm_end)
+ 		return;
+ 	end = min(vma->vm_end, end_addr);
+@@ -2590,32 +2714,7 @@
+ 	return same;
+ }
+ 
+-/** Implementation S0 **/
+-void memory_register_pfn(uint64_t pfn, struct page *page)
+-{
+-	if(current->spp_state == NULL) {
+-		current->spp_state = (struct spp_pfn_state*) kmalloc(sizeof(struct spp_pfn_state), GFP_KERNEL);
+-		current->spp_state->flag = SPP_UNSHARED;
+-		current->spp_state->head = NULL;
+-	}
+-
+-	struct spp_pfn *ptr = get_current()->spp_state->head;
+-    struct spp_pfn *it = ptr;
+-
+-    while(it) {
+-            if (it->pfn == pfn) return;
+-            it = it->next;
+-    }
+-
+-    printk("memory register %lx\n", pfn);
+-    it = (struct spp_pfn *) kmalloc(sizeof(struct spp_pfn), GFP_KERNEL);
+-    it->pfn = pfn;
+-    it->next = ptr;
+-	it->page = page;
+-	set_bit(PG_spp, &page->flags);
+-    get_current()->spp_state->head = it;
+-    return;
+-}
++
+ 
+ static inline bool cow_user_page(struct page *dst, struct page *src,
+ 				 struct vm_fault *vmf)
+@@ -2627,29 +2726,9 @@
+ 	struct vm_area_struct *vma = vmf->vma;
+ 	struct mm_struct *mm = vma->vm_mm;
+ 	unsigned long addr = vmf->address;
+-
++	
+ 	if (likely(src)) {
+-		copy_user_highpage(dst, src, addr, vma);
+-	 	xen_hvm_subpage_t xen = {
+-            .domid = DOMID_SELF,
+-            .subpage = 150,
+-            .op = 3,
+-        };
+-
+-		/** Implementation S0 **/
+-	    if (test_bit(PG_spp, &src->flags)) {
+-            xen.dest_gfn = page_to_phys(dst) >> 12,
+-            xen.src_gfn = page_to_phys(src) >> 12,
+-            set_bit(PG_spp, &dst->flags);
+-	    	if (current->spp_state && current->spp_state->flag == SPP_SHARED) {
+-				current->spp_state->flag = SPP_UNSHARED;
+-				current->spp_state = NULL;
+-				printk("We unshare the spp_pfn_state\n");
+-			}
+-	    	memory_register_pfn(xen.dest_gfn, dst);
+-        	HYPERVISOR_hvm_op(HVMOP_set_subpage, &xen);
+-        }
+-		
++		copy_user_highpage(dst, src, addr, vma);	
+ 		return true;
+ 	}
+ 
+@@ -2878,6 +2957,7 @@
+  *   held to the old page, as well as updating the rmap.
+  * - In any case, unlock the PTL and drop the reference we took to the old page.
+  */
++
+ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
+ {
+ 	struct vm_area_struct *vma = vmf->vma;
+@@ -2890,6 +2970,8 @@
+ 
+ 	if (unlikely(anon_vma_prepare(vma)))
+ 		goto oom;
++	
++
+ 
+ 	if (is_zero_pfn(pte_pfn(vmf->orig_pte))) {
+ 		new_page = alloc_zeroed_user_highpage_movable(vma,
+@@ -2901,7 +2983,6 @@
+ 				vmf->address);
+ 		if (!new_page)
+ 			goto oom;
+-
+ 		if (!cow_user_page(new_page, old_page, vmf)) {
+ 			/*
+ 			 * COW failed, if the fault was solved by other,
+@@ -2916,6 +2997,7 @@
+ 		}
+ 	}
+ 
++
+ 	if (mem_cgroup_charge(new_page, mm, GFP_KERNEL))
+ 		goto oom_free_new;
+ 	cgroup_throttle_swaprate(new_page, GFP_KERNEL);
+@@ -3144,7 +3226,6 @@
+ 		pte_unmap_unlock(vmf->pte, vmf->ptl);
+ 		return handle_userfault(vmf, VM_UFFD_WP);
+ 	}
+-
+ 	/*
+ 	 * Userfaultfd write-protect can defer flushes. Ensure the TLB
+ 	 * is flushed in this case before copying.
+@@ -3547,6 +3628,7 @@
+ 	vm_fault_t ret = 0;
+ 	pte_t entry;
+ 
++
+ 	/* File mapping without ->vm_ops ? */
+ 	if (vma->vm_flags & VM_SHARED)
+ 		return VM_FAULT_SIGBUS;
+@@ -3593,7 +3675,16 @@
+ 	/* Allocate our own private page. */
+ 	if (unlikely(anon_vma_prepare(vma)))
+ 		goto oom;
+-	page = alloc_zeroed_user_highpage_movable(vma, vmf->address);
++/* Implementation S0-POOL */
++	if (vma->spp) {
++		printk("SPP: do_anonymous_page(): vma->start %lx vma->end %lx vma->spp_freq %d\n", vma->vm_start, vma->vm_end, vma->spp_freq);
++		page = spp_get_page(vma->spp_freq);
++		if (page == NULL) printk("SPP: no page available\n");
++		atomic_inc_and_test(&page->_mapcount);
++		atomic_inc_and_test(&page->_refcount);
++	} else {
++		page = alloc_zeroed_user_highpage_movable(vma, vmf->address);
++	}
+ 	if (!page)
+ 		goto oom;
+ 
+@@ -3630,10 +3721,11 @@
+ 		put_page(page);
+ 		return handle_userfault(vmf, VM_UFFD_MISSING);
+ 	}
+-
++	
+ 	inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
+ 	page_add_new_anon_rmap(page, vma, vmf->address, false);
+ 	lru_cache_add_inactive_or_unevictable(page, vma);
++
+ setpte:
+ 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
+ 
+@@ -4112,6 +4204,7 @@
+ 	if (ret & VM_FAULT_DONE_COW)
+ 		return ret;
+ 
++
+ 	copy_user_highpage(vmf->cow_page, vmf->page, vmf->address, vma);
+ 	__SetPageUptodate(vmf->cow_page);
+ 
+diff -ur ./mm/mmap.c ./mm/mmap.c
+--- ./mm/mmap.c	2021-09-14 13:33:39.155104480 +0200
++++ ./mm/mmap.c	2021-07-12 10:43:48.858563221 +0200
+@@ -1452,6 +1452,8 @@
+ 	if (IS_ERR_VALUE(addr))
+ 		return addr;
+ 
++
++
+ 	if (flags & MAP_FIXED_NOREPLACE) {
+ 		struct vm_area_struct *vma = find_vma(mm, addr);
+ 
+@@ -1471,6 +1473,7 @@
+ 	 */
+ 	vm_flags = calc_vm_prot_bits(prot, pkey) | calc_vm_flag_bits(flags) |
+ 			mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC;
++	
+ 
+ 	if (flags & MAP_LOCKED)
+ 		if (!can_do_mlock())
+@@ -1785,7 +1788,9 @@
+ 	vma->vm_flags = vm_flags;
+ 	vma->vm_page_prot = vm_get_page_prot(vm_flags);
+ 	vma->vm_pgoff = pgoff;
+-
++	vma->spp_freq = -1;
++	vma->spp = false;
++	
+ 	if (file) {
+ 		if (vm_flags & VM_DENYWRITE) {
+ 			error = deny_write_access(file);
+@@ -2285,6 +2290,8 @@
+ 	if (IS_ERR_VALUE(addr))
+ 		return addr;
+ 
++		
++
+ 	if (addr > TASK_SIZE - len)
+ 		return -ENOMEM;
+ 	if (offset_in_page(addr))
+@@ -3169,7 +3176,6 @@
+ 	struct mmu_gather tlb;
+ 	struct vm_area_struct *vma;
+ 	unsigned long nr_accounted = 0;
+-
+ 	/* mm's last user has gone, and its about to be pulled down */
+ 	mmu_notifier_release(mm);
+ 
+diff -ur ./mm/mprotect.c ./mm/mprotect.c
+--- ./mm/mprotect.c	2021-09-14 13:33:39.155104480 +0200
++++ ./mm/mprotect.c	2021-07-06 12:20:28.973562377 +0200
+@@ -43,92 +43,6 @@
+ #include <xen/hvm.h>
+ 
+ 
+-/** Implementation S0 **/
+-#define SPP_MAX 50
+-
+-/** Implementation S0 **/
+-void register_pfn(uint64_t pfn, struct page *page)
+-{
+-	if(current->spp_state == NULL) {
+-		current->spp_state = (struct spp_pfn_state*) kmalloc(sizeof(struct spp_pfn_state), GFP_KERNEL);
+-		current->spp_state->flag = SPP_UNSHARED;
+-		current->spp_state->head = NULL;
+-	}
+-
+-	struct spp_pfn *ptr = get_current()->spp_state->head;
+-    struct spp_pfn *it = ptr;
+-
+-    while(it) {
+-            if (it->pfn == pfn) return;
+-            it = it->next;
+-    }
+-
+-    printk("register %lx\n", pfn);
+-    it = (struct spp_pfn *) kmalloc(sizeof(struct spp_pfn), GFP_KERNEL);
+-    it->pfn = pfn;
+-    it->next = ptr;
+-	it->page = page;
+-	set_bit(PG_spp, &page->flags);
+-    get_current()->spp_state->head = it;
+-    return;
+-}
+-
+-/** Implementation S0 **/
+-void unregister_pfn(void)
+-{
+-	if(!current->spp_state) return;
+-
+-	if(current->spp_state->flag == SPP_SHARED) {
+-		current->spp_state = NULL;
+-		return;
+-	}	
+-
+-    uint64_t list_spp[SPP_MAX];
+-	int i;
+-    for ( i = 0 ; i < SPP_MAX ; i++)
+-    {
+-        list_spp[i] = 0;
+-    }
+-
+-    struct spp_pfn *ptr = get_current()->spp_state->head;
+-    struct spp_pfn *it = ptr;
+-    i = 0;
+-    while(ptr) {
+-        printk("unregister: %lx\n", ptr->pfn);
+-    //on recupère le spp qui nous interesse
+-        list_spp[i++] = ptr->pfn;
+-        clear_bit(PG_spp, &(ptr->page)->flags);
+-        ptr = ptr->next;
+-        kfree(it);
+-        it = ptr;
+-    }
+-	kfree(current->spp_state);
+-    HYPERVISOR_hvm_op(HVMOP_release_subpage, &list_spp);
+-}
+-
+-/** Implementation S0 **/
+-static long get_pfn(unsigned long user_addr,
+-                 uint64_t *pfn, struct page **page)
+-{
+-        struct vm_area_struct *vma;
+-        long ret;
+-
+-        mmap_read_lock(current->mm);
+-        ret = -EINVAL;
+-        vma = find_vma(current->mm, user_addr);
+-        if (!vma)
+-                goto out;
+-
+-        unsigned long old = vma->vm_flags;
+-        vma->vm_flags |= VM_IO | VM_PFNMAP;
+-        ret = follow_pfn_page(vma, user_addr, pfn, page);
+-out:
+-        vma->vm_flags = old;
+-        mmap_read_unlock(current->mm);
+-        return ret;
+-}
+-
+-
+ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
+ 		unsigned long addr, unsigned long end, pgprot_t newprot,
+ 		unsigned long cp_flags)
+@@ -609,51 +523,8 @@
+ 	unsigned long nstart, end, tmp, reqprot;
+ 	struct vm_area_struct *vma, *prev;
+ 	
+-	xen_hvm_subpage_t spp = {
+-                .domid = DOMID_SELF,
+-                .subpage = (start & 0xfff) >> 7,
+-        };
+-
+-        struct page *page;
+-        int error = -EINVAL;
+-/** Implementation S0 **/
+-        /* set subpage */
+-        if (prot == 16) {
+-                spp.op = 0;
+-        error = get_pfn(start, &spp.dest_gfn, &page);
+-        if (error != 0) {
+-                printk("get pfn error %d\n", error);
+-                        return error;
+-        }
+-                printk("Hypercall: set subpage %lx %llx %u\n",start, spp.dest_gfn, spp.subpage);
+-                
+-        register_pfn(spp.dest_gfn, page);
+-        HYPERVISOR_hvm_op(HVMOP_set_subpage, &spp);
+-                return 0;
+-    }
+-
+-/** Implementation S0 **/
+-       /* unset subpage */
+-    if (prot == 32) {
+-        spp.op = 1;
+-                error = get_pfn(start, &spp.dest_gfn, &page);
+-        if (error != 0) {
+-            printk("get pfn error %d\n", error);
+-                return error;
+-        }
+-        printk("Hypercall: unset subpage %lx %llx %u\n", start, spp.dest_gfn, spp.subpage);
+-	//	register_pfn(spp.dest_gfn);
+-
+-        HYPERVISOR_hvm_op(HVMOP_set_subpage, &spp);
+-        return 0;
+-        }
+-
+-/** Implementation S0 **/
+-	/* release pfn */
+-    if (prot == 64){
+-        unregister_pfn();
+-        return 0;
+-    }
++    struct page *page;
++    int error = -EINVAL;
+ 
+ 
+ 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
+diff -ur ./mm/page_alloc.c ./mm/page_alloc.c
+--- ./mm/page_alloc.c	2021-09-14 13:33:39.159104468 +0200
++++ ./mm/page_alloc.c	2021-06-25 14:15:34.693114941 +0200
+@@ -1042,7 +1042,8 @@
+ 		combined_pfn = buddy_pfn & pfn;
+ 		page = page + (combined_pfn - pfn);
+ 		pfn = combined_pfn;
+-		order++;
++		order++; 
++//		printk("SPP: __free_one_page(): %lx\n", page_to_pfn(buddy));
+ 	}
+ 	if (order < MAX_ORDER - 1) {
+ 		/* If we are here, it means order is >= pageblock_order.
+@@ -3215,6 +3216,7 @@
+ 	struct per_cpu_pages *pcp;
+ 	int migratetype;
+ 
++//	printk("free_unref_page_commit(): %lx %lx %d\n", page_to_pfn(page), page->flags, current->pid);
+ 	migratetype = get_pcppage_migratetype(page);
+ 	__count_vm_event(PGFREE);
+ 
+@@ -3237,6 +3239,7 @@
+ 	pcp = &this_cpu_ptr(zone->pageset)->pcp;
+ 	list_add(&page->lru, &pcp->lists[migratetype]);
+ 	pcp->count++;
++
+ 	if (pcp->count >= READ_ONCE(pcp->high))
+ 		free_pcppages_bulk(zone, READ_ONCE(pcp->batch), pcp);
+ }
+@@ -3246,6 +3249,7 @@
+  */
+ void free_unref_page(struct page *page)
+ {
++
+ 	unsigned long flags;
+ 	unsigned long pfn = page_to_pfn(page);
+ 
+@@ -5083,6 +5087,7 @@
+  */
+ void __free_pages(struct page *page, unsigned int order)
+ {
++
+ 	if (put_page_testzero(page))
+ 		free_the_page(page, order);
+ 	else if (!PageHead(page))
+diff -ur ./mm/rmap.c ./mm/rmap.c
+--- ./mm/rmap.c	2021-09-14 13:33:39.159104468 +0200
++++ ./mm/rmap.c	2021-07-07 14:42:36.821847625 +0200
+@@ -1339,15 +1339,6 @@
+ {
+ 	lock_page_memcg(page);
+ 
+- 	xen_hvm_subpage_t spp = {
+-                 .domid = DOMID_SELF,
+-                 .subpage = 100,
+-                 .dest_gfn = page_to_phys(page) >> 12,
+-                 .op = 2,
+-         };
+-
+-
+-
+ 	if (!PageAnon(page)) {
+ 		page_remove_file_rmap(page, compound);
+ 		goto out;
+@@ -1357,24 +1348,17 @@
+ 		page_remove_anon_compound_rmap(page);
+ 		goto out;
+ 	}
+-
+-	/* page still mapped by someone else? */
++		/* page still mapped by someone else? */
+ 	if (!atomic_add_negative(-1, &page->_mapcount))
+ 		goto out;
+ 
+-	/** Implementation S0 **/
+ 	if (test_bit(PG_spp, &page->flags)) {
+-        printk("unmap spp page %lx\n", page_to_phys(page));
+-        clear_bit(PG_spp, &page->flags);
+-        HYPERVISOR_hvm_op(HVMOP_set_subpage, &spp);
+-    }
+-	/*
+-	 * We use the irq-unsafe __{inc|mod}_zone_page_stat because
+-	 * these counters are not modified in interrupt context, and
+-	 * pte lock(a spinlock) is held, which implies preemption disabled.
+-	 */
+-	__dec_lruvec_page_state(page, NR_ANON_MAPPED);
++		printk("SPP: page_remove_rmap(): page %lx\n", page_to_pfn(page));
++		goto out;
++	}
+ 
++
++	__dec_lruvec_page_state(page, NR_ANON_MAPPED);
+ 	if (unlikely(PageMlocked(page)))
+ 		clear_page_mlock(page);
+ 
+@@ -1400,6 +1384,7 @@
+ static bool try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
+ 		     unsigned long address, void *arg)
+ {
++
+ 	struct mm_struct *mm = vma->vm_mm;
+ 	struct page_vma_mapped_walk pvmw = {
+ 		.page = page,
+diff -ur ./mm/slub.c ./mm/slub.c
+--- ./mm/slub.c	2021-09-14 13:33:39.159104468 +0200
++++ ./mm/slub.c	2021-07-05 15:31:50.953720085 +0200
+@@ -301,7 +301,7 @@
+ {
+ 	unsigned long freeptr_addr = (unsigned long)object + s->offset;
+ 
+-#ifdef CONFIG_SLAB_FREELIST_HARDENED
++#ifdef CONFIG_SLAB_FREELIST_HARDENED	
+ 	BUG_ON(object == fp); /* naive detection of double free or corruption */
+ #endif
+ 
+@@ -1579,6 +1579,7 @@
+ 		/* If object's reuse doesn't have to be delayed */
+ 		if (!slab_free_hook(s, object)) {
+ 			/* Move object to the new freelist */
++
+ 			set_freepointer(s, object, *head);
+ 			*head = object;
+ 			if (!*tail)
+@@ -1712,6 +1713,7 @@
+ 		next = next_freelist_entry(s, page, &pos, start, page_limit,
+ 			freelist_count);
+ 		next = setup_object(s, page, next);
++
+ 		set_freepointer(s, cur, next);
+ 		cur = next;
+ 	}
+@@ -1793,6 +1795,7 @@
+ 		for (idx = 0, p = start; idx < page->objects - 1; idx++) {
+ 			next = p + s->size;
+ 			next = setup_object(s, page, next);
++
+ 			set_freepointer(s, p, next);
+ 			p = next;
+ 		}
+@@ -2188,6 +2191,7 @@
+ 		do {
+ 			prior = page->freelist;
+ 			counters = page->counters;
++
+ 			set_freepointer(s, freelist, prior);
+ 			new.counters = counters;
+ 			new.inuse--;
+@@ -2225,6 +2229,7 @@
+ 	new.counters = old.counters;
+ 	if (freelist) {
+ 		new.inuse--;
++
+ 		set_freepointer(s, freelist, old.freelist);
+ 		new.freelist = freelist;
+ 	} else
+@@ -2984,6 +2989,7 @@
+ 		}
+ 		prior = page->freelist;
+ 		counters = page->counters;
++
+ 		set_freepointer(s, tail, prior);
+ 		new.counters = counters;
+ 		was_frozen = new.frozen;
+diff -ur ./mm/swap.c ./mm/swap.c
+--- ./mm/swap.c	2021-09-14 13:33:39.163104456 +0200
++++ ./mm/swap.c	2021-06-25 10:56:18.064074612 +0200
+@@ -222,6 +222,7 @@
+ 	}
+ 	if (lruvec)
+ 		unlock_page_lruvec_irqrestore(lruvec, flags);
++//	printk("SPP: pagevec_lru_move_fn(): %lx %d\n", page_to_pfn(pvec->pages[0]), current->pid);
+ 	release_pages(pvec->pages, pvec->nr);
+ 	pagevec_reinit(pvec);
+ }
+@@ -855,6 +856,7 @@
+  */
+ void release_pages(struct page **pages, int nr)
+ {
++//	printk("SPP: release_pages(): %lx %d\n", page_to_pfn(pages[0]), current->pid);
+ 	int i;
+ 	LIST_HEAD(pages_to_free);
+ 	struct lruvec *lruvec = NULL;
+@@ -951,6 +953,7 @@
+ 		lru_add_drain();
+ 		pvec->percpu_pvec_drained = true;
+ 	}
++//	printk("SPP: __pagevec_release(): %lx %d\n", page_to_pfn(pvec->pages[0]), current->pid);
+ 	release_pages(pvec->pages, pagevec_count(pvec));
+ 	pagevec_reinit(pvec);
+ }
+@@ -1027,6 +1030,7 @@
+ 	}
+ 	if (lruvec)
+ 		unlock_page_lruvec_irqrestore(lruvec, flags);
++//	printk("SPP: __pagevec_lru_add(): %lx %d\n", page_to_pfn(pvec->pages[0]), current->pid);
+ 	release_pages(pvec->pages, pvec->nr);
+ 	pagevec_reinit(pvec);
+ }
+diff -ur ./mm/vmalloc.c ./mm/vmalloc.c
+--- ./mm/vmalloc.c	2021-09-14 13:33:39.163104456 +0200
++++ ./mm/vmalloc.c	2021-06-24 15:15:34.434896967 +0200
+@@ -2254,7 +2254,6 @@
+ static void __vunmap(const void *addr, int deallocate_pages)
+ {
+ 	struct vm_struct *area;
+-
+ 	if (!addr)
+ 		return;
+ 

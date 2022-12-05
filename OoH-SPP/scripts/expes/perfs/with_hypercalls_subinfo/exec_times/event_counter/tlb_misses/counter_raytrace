@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.raytrace - [Removing run directory] 
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh raytrace':
+
+    16,892,666,786      cycles                                                        (69.27%)
+    33,415,402,446      instructions              #    1.98  insn per cycle           (84.73%)
+        47,561,294      cache-misses                                                  (86.49%)
+         1,654,269      dTLB-load-misses                                              (86.62%)
+       127,239,483      dtlb_load_misses.stlb_hit                                     (85.59%)
+     5,035,329,035      branch-loads                                                  (86.16%)
+        72,603,597      branch-loads-misses                                           (55.14%)
+
+       3.906000284 seconds time elapsed
+
+       3.284442000 seconds user
+       0.579072000 seconds sys
+
+

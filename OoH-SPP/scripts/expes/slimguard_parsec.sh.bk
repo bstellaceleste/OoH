@@ -1,0 +1,74 @@
+#!/bin/bash
+if [ "$#" -lt "2" ]
+then
+	echo "./launch $policy (1: Slimguard-Default - 2: Slimguard-SPP) $bench (dedup, streamcluster, etc.)"
+	exit 0
+fi
+
+HOME="/home/stella/Slimguard"
+PARSEC="$HOME/evals/parsec-3.0"
+LOGS="perf_evals/parsec"
+
+/sbin/sysctl vm.overcommit_memory=1
+cd $PARSEC
+. env.sh
+parsecmgmt -a clean -p $2
+
+sleep 120 #put back 120
+
+if [ "$1" -eq "0" ] #GLibc
+then
+	echo "******************************************************" >> perf_evals/$2
+	LD_PRELOAD=taskset -c 3 parsecmgmt -a run -p $2 -i native &>> perf_evals/parsec/$2
+
+elif [ "$1" -eq "1" ] #Slimguard-default
+then
+	cd $HOME/standard-GP-standard
+	echo "******************************************************" >> $LOGS/$2
+	LD_PRELOAD=$HOME/standard-GP-standard/libSlimGuard.so taskset -c 3 nohup parsecmgmt -a run -p $2 -i native >> $LOGS/$2 2>&1 &
+
+elif [ "$1" -eq "2" ] #Slimguard-SPP
+then
+	cd $HOME/KONE-SPP-standard
+	echo "******************************************************" >> perf_evals/parsec/$2
+	LD_PRELOAD=$HOME/KONE-SPP-standard/libSlimGuard.so taskset -c 3 nohup parsecmgmt -a run -p $2 -i native >> $LOGS/$2 2>&1 &
+
+fi
+
+echo "******************************************************" >>  $LOGS/$2_wss
+
+pid=$(pidof $2)
+while [ -z "$pid" ] #tant que la chaine de char pid est vide
+do
+	pid=$(pidof $2)
+done
+
+taskset -c 2 nohup ../evals/wss.pl -s 0 $(pidof $2) 5 >> $LOGS/$2_wss 2>&1
+
+cd /home/stella
+val=`cat iter`
+if [ "$val" -lt "5" ]
+then
+	echo $(($val+1)) > iter
+	sysctl -w vm.drop_caches=3
+	poweroff
+elif [ "$val" -eq "5" ]
+then
+	val=`cat bench`
+	echo 1 > iter #reinitialise pour faire également 5 runs pour le bench suivant
+        sysctl -w vm.drop_caches=3
+	if [ "$val" -lt 10 ]
+	then
+		echo $(($val+1)) > bench #passe au bench suivant
+		poweroff
+	elif [ "$val" -eq 10 ]
+	then
+		val=`cat policy`
+                if [ "$val" -lt "2" ]
+                then
+			echo $(($val+1)) > policy
+                        echo 1 > bench
+                        poweroff
+                fi
+	fi
+fi

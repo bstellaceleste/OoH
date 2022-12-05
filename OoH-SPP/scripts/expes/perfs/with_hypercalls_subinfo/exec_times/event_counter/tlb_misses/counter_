@@ -1,0 +1,113 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Error: PKGS expected after '-p'
+Usage: parsecmgmt -a ACTION [OPTION]...
+
+Manage the installation of the PARSEC benchmark suite.
+
+Options:
+    -a ACTION        Specifies the action to perform. See below for a
+                     list of valid actions.
+    -p PACKAGE       A list of packages or aliases on which the action is to be
+                     performed.
+    -c CONFIG        Which build configuration to use. Default: 'gcc'
+    -d RUNDIR        Use directory RUNDIR as root in which to run the
+                     benchmarks.
+    -i INPUT         The input to use to run the benchmarks. Default: 'test'
+    -n THREADS       The minimum number of threads to use. Default: '1'
+    -s SUBMIT        Command to use to submit the benchmark for execution.
+                     Default: 'time'
+    -x EXTENSION     Extension to append to platform descriptor string.
+                     Default: none
+    -k               Keep & use run directory as found, do not unpack inputs for
+                     benchmark execution. Assume everything is already set up.
+    -m NETMODE       Execution mode for network workloads. 
+                     NETMODE can be either 'server' or 'client'. 
+    -t THREADS       The number of user threads talking to the upTCP/IP stack. Default: '1'
+    -r THREADS       The number of TCP/IP protocol receving threads. Default: '1'
+    -l               Disable log.
+    -h               Displays this help message.
+
+
+Actions:
+    'build'          Builds and installs the specified packages.
+    'run'            Runs the specified packages.
+    'clean'          Removes all files generated during the build and run phase
+                     of the listed packages for the current platform, but
+                     leaves the installed files untouched.
+    'uninstall'      Removes the installed files of the listed packages for the
+                     current platform.
+    'fullclean'      Like 'clean', but for all architectures.
+    'fulluninstall'  Like 'uninstall', but for all architectures.
+    'status'         Shows a summary of the current status of the PARSEC
+                     installation.
+    'info'           List available packages and configurations.
+
+
+Examples (1) [Compatible to PARSEC 2.1 but Extended]:
+    - Build all benchmarks of three suites, i.e., PARSEC, SPLASH-2 and SPLASH-2x:
+        parsecmgmt -a build -p all
+    - Build only applications, use 'icc' as build configuration:
+        parsecmgmt -a build -c icc -p apps
+    - Do a full cleanup after a build or benchmark run:
+        parsecmgmt -a fullclean -p all
+    - Remove all generated files of the current architecture:
+        parsecmgmt -a uninstall -p all
+    - Run benchmark 'ferret' w/ input 'simsmall' and 4 threads:
+        parsecmgmt -a run -p ferret -i simsmall -n 4
+    - Get a quick summary of all available packages and features:
+        parsecmgmt -a info
+    - Show which kernel binaries have been installed:
+        parsecmgmt -a status -p kernels
+
+
+Examples (2) [NEW: Network Benchmarks]:
+    - Check the status of all components involved in network benchmarks:
+        parsecmgmt -a status -p netapps
+    - Build network benchmark 'netstreamcluster':
+        parsecmgmt -a build -p raytrace
+    - Build all network benchmark:
+        parsecmgmt -a build -p netapps
+    - Run network benchmark 'netdedup' w/ input 'native' and 2 server threads:
+        parsecmgmt -a run -p netdedup -i native -n 2
+    - Run network benchmark 'netferret' w/ input 'simlarge', 4 server threads and 2 client connections:
+        parsecmgmt -a run -p netferret -i simlarge -n 4 -t 2
+    - For simulation, run 'netdedup' server on a simulator w/ 4 threads and run client on a real machine:
+        parsecmgmt -a run -p netdedup -i simlarge -n 4 -m server
+        parsecmgmt -a run -p netdedup -i simlarge -m client
+    - Do a full cleanup for network benchmarks:
+        parsecmgmt -a fullclean -p netapps
+
+
+Examples (3) [NEW: SPLASH-2 Suite and SPLASH-2x Suite]:
+    - Check the status of SPLASH-2 suite and SPLASH-2x suite:
+        parsecmgmt -a status -p splash2
+        parsecmgmt -a status -p splash2x
+    - Build benchmark 'raytrace' from SPLASH-2x suite other than PARSEC:
+        parsecmgmt -a build -p splash2x.raytrace
+        parsecmgmt -a build -p raytrace   ## defaultly from PARSEC (for comparison)
+    - Build benchmark 'fft' from SPLASH-2 suite with 'gcc-serial' build configuration:
+        parsecmgmt -a build -c gcc-serial -p splash2.fft
+    - Build all benchmarks from SPLASH-2 suite and SPLASH-2x suite:
+        parsecmgmt -a build -p splash2
+        parsecmgmt -a build -p splash2x
+    - Run benchmark 'fft' from SPLASH-2x w/ input 'simsmall' and 4 threads:
+        parsecmgmt -a run -p splash2x.fft -i simsmall -n 4
+    - Do a full cleanup for SPLASH-2 suite
+        parsecmgmt -a fullclean -p splash2
+
+ Performance counter stats for './ldpreload.sh':
+
+     3,908,125,090      cycles                                                        (64.68%)
+     6,497,892,521      instructions              #    1.66  insn per cycle           (86.86%)
+        14,349,819      cache-misses                                                  (79.63%)
+         1,148,096      dTLB-load-misses                                              (83.29%)
+        26,707,571      dtlb_load_misses.stlb_hit                                     (86.30%)
+        13,963,171      branch-misses                                                 (86.10%)
+
+       0.929346988 seconds time elapsed
+
+       0.534441000 seconds user
+       0.393929000 seconds sys
+
+

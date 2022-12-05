@@ -1,0 +1,38 @@
+******************************************************
+Watching PID 3697 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+5.010      1409.95    1408.23    1408.40
+5.013      1191.76    1190.05     218.69
+5.012      1063.00    1061.28     108.04
+5.013       788.61     786.89      64.73
+ERROR: can't open /proc/3697/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 4688 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+5.009      1416.68    1414.88    1415.03
+5.013      1192.03    1190.23     240.24
+5.012       934.42     932.62      38.75
+ERROR: can't open /proc/4688/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 3551 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+5.008      1419.31    1417.53    1417.73
+5.015      1192.04    1190.25     235.73
+5.013       955.80     954.01      54.32
+ERROR: can't open /proc/3551/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 4163 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+5.010      1423.10    1421.31    1421.44
+5.013      1192.09    1190.30     236.67
+5.012      1000.16     998.36     101.46
+5.011       838.27     836.48      60.56
+ERROR: can't open /proc/4163/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 6199 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+5.010      1408.95    1407.16    1407.31
+5.013      1191.91    1190.12     238.09
+5.012      1063.30    1061.51     148.63
+5.013       865.64     863.85     138.12
+ERROR: can't open /proc/6199/smaps: No such file or directory at ../evals/wss.pl line 226.

@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.x264 - [Removing run directory] 
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh x264':
+
+   243,421,598,843      cycles                                                        (71.34%)
+   479,799,624,455      instructions              #    1.97  insn per cycle           (85.68%)
+       983,315,106      cache-misses                                                  (85.72%)
+        42,085,762      dTLB-load-misses                                              (85.73%)
+     4,190,012,102      dtlb_load_misses.stlb_hit                                     (85.70%)
+    30,169,254,200      branch-loads                                                  (85.76%)
+     1,370,301,103      branch-loads-misses                                           (57.10%)
+
+      58.320831032 seconds time elapsed
+
+      56.203044000 seconds user
+       1.939599000 seconds sys
+
+

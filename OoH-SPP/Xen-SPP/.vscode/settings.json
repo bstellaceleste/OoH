@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "cpuid.h": "c",
+        "vm_event.h": "c",
+        "xen.h": "c",
+        "event_channel.h": "c",
+        "vmx.h": "c",
+        "vmcs.h": "c"
+    }
+}

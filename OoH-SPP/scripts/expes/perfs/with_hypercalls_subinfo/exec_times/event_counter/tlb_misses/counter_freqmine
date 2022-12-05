@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.freqmine - [Removing run directory] 
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh freqmine':
+
+    20,710,594,691      cycles                                                        (69.91%)
+    38,891,822,873      instructions              #    1.88  insn per cycle           (85.29%)
+        38,763,038      cache-misses                                                  (86.57%)
+         2,216,781      dTLB-load-misses                                              (85.61%)
+       332,865,887      dtlb_load_misses.stlb_hit                                     (86.45%)
+     6,632,647,675      branch-loads                                                  (86.03%)
+       166,277,601      branch-loads-misses                                           (55.35%)
+
+       4.753597575 seconds time elapsed
+
+       4.174760000 seconds user
+       0.540576000 seconds sys
+
+

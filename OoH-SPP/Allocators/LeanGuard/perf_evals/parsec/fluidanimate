@@ -1,0 +1,130 @@
+******************************************************
+[PARSEC] Benchmarks to run:  parsec.fluidanimate
+
+[PARSEC] [========== Running benchmark parsec.fluidanimate [1] ==========]
+[PARSEC] Setting up run directory.
+[PARSEC] Unpacking benchmark input 'native'.
+in_500K.fluid
+[PARSEC] Running 'time /home/stella/Slimguard/evals/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 1 500 in_500K.fluid out.fluid':
+[PARSEC] [---------- Beginning of output ----------]
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Loading file "in_500K.fluid"...
+Number of cells: 229900
+Grids steps over x, y, z: 0.00236364 0.00236842 0.00236364
+Number of particles: 501642
+Saving file "out.fluid"...
+
+real	4m18,932s
+user	4m18,579s
+sys	0m0,208s
+[PARSEC] [----------    End of output    ----------]
+[PARSEC]
+[PARSEC] BIBLIOGRAPHY
+[PARSEC]
+[PARSEC] [1] Bienia. Benchmarking Modern Multiprocessors. Ph.D. Thesis, 2011.
+[PARSEC]
+[PARSEC] Done.
+******************************************************
+[PARSEC] Benchmarks to run:  parsec.fluidanimate
+
+[PARSEC] [========== Running benchmark parsec.fluidanimate [1] ==========]
+[PARSEC] Setting up run directory.
+[PARSEC] Unpacking benchmark input 'native'.
+in_500K.fluid
+[PARSEC] Running 'time /home/stella/Slimguard/evals/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 1 500 in_500K.fluid out.fluid':
+[PARSEC] [---------- Beginning of output ----------]
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Loading file "in_500K.fluid"...
+Number of cells: 229900
+Grids steps over x, y, z: 0.00236364 0.00236842 0.00236364
+Number of particles: 501642
+Saving file "out.fluid"...
+
+real	4m20,508s
+user	4m20,218s
+sys	0m0,144s
+[PARSEC] [----------    End of output    ----------]
+[PARSEC]
+[PARSEC] BIBLIOGRAPHY
+[PARSEC]
+[PARSEC] [1] Bienia. Benchmarking Modern Multiprocessors. Ph.D. Thesis, 2011.
+[PARSEC]
+[PARSEC] Done.
+******************************************************
+[PARSEC] Benchmarks to run:  parsec.fluidanimate
+
+[PARSEC] [========== Running benchmark parsec.fluidanimate [1] ==========]
+[PARSEC] Setting up run directory.
+[PARSEC] Unpacking benchmark input 'native'.
+in_500K.fluid
+[PARSEC] Running 'time /home/stella/Slimguard/evals/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 1 500 in_500K.fluid out.fluid':
+[PARSEC] [---------- Beginning of output ----------]
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Loading file "in_500K.fluid"...
+Number of cells: 229900
+Grids steps over x, y, z: 0.00236364 0.00236842 0.00236364
+Number of particles: 501642
+Saving file "out.fluid"...
+
+real	4m18,383s
+user	4m18,046s
+sys	0m0,152s
+[PARSEC] [----------    End of output    ----------]
+[PARSEC]
+[PARSEC] BIBLIOGRAPHY
+[PARSEC]
+[PARSEC] [1] Bienia. Benchmarking Modern Multiprocessors. Ph.D. Thesis, 2011.
+[PARSEC]
+[PARSEC] Done.
+******************************************************
+[PARSEC] Benchmarks to run:  parsec.fluidanimate
+
+[PARSEC] [========== Running benchmark parsec.fluidanimate [1] ==========]
+[PARSEC] Setting up run directory.
+[PARSEC] Unpacking benchmark input 'native'.
+in_500K.fluid
+[PARSEC] Running 'time /home/stella/Slimguard/evals/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 1 500 in_500K.fluid out.fluid':
+[PARSEC] [---------- Beginning of output ----------]
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Loading file "in_500K.fluid"...
+Number of cells: 229900
+Grids steps over x, y, z: 0.00236364 0.00236842 0.00236364
+Number of particles: 501642
+Saving file "out.fluid"...
+
+real	4m19,484s
+user	4m19,163s
+sys	0m0,180s
+[PARSEC] [----------    End of output    ----------]
+[PARSEC]
+[PARSEC] BIBLIOGRAPHY
+[PARSEC]
+[PARSEC] [1] Bienia. Benchmarking Modern Multiprocessors. Ph.D. Thesis, 2011.
+[PARSEC]
+[PARSEC] Done.
+******************************************************
+[PARSEC] Benchmarks to run:  parsec.fluidanimate
+
+[PARSEC] [========== Running benchmark parsec.fluidanimate [1] ==========]
+[PARSEC] Setting up run directory.
+[PARSEC] Unpacking benchmark input 'native'.
+in_500K.fluid
+[PARSEC] Running 'time /home/stella/Slimguard/evals/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 1 500 in_500K.fluid out.fluid':
+[PARSEC] [---------- Beginning of output ----------]
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Loading file "in_500K.fluid"...
+Number of cells: 229900
+Grids steps over x, y, z: 0.00236364 0.00236842 0.00236364
+Number of particles: 501642
+Saving file "out.fluid"...
+
+real	4m18,319s
+user	4m17,990s
+sys	0m0,181s
+[PARSEC] [----------    End of output    ----------]
+[PARSEC]
+[PARSEC] BIBLIOGRAPHY
+[PARSEC]
+[PARSEC] [1] Bienia. Benchmarking Modern Multiprocessors. Ph.D. Thesis, 2011.
+[PARSEC]
+[PARSEC] Done.

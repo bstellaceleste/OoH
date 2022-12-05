@@ -1,0 +1,27 @@
+Les fichiers binaires ./bochs et ../../Documents/Bochs-svn-master/bochs sont différents
+Les fichiers binaires ./bxhub et ../../Documents/Bochs-svn-master/bxhub sont différents
+Les fichiers binaires ./bximage et ../../Documents/Bochs-svn-master/bximage sont différents
+diff -ur ./cpu/paging.cc ../../Documents/Bochs-svn-master/cpu/paging.cc
+--- ./cpu/paging.cc	2021-09-15 16:55:53.785519452 +0200
++++ ../../Documents/Bochs-svn-master/cpu/paging.cc	2021-09-15 16:57:54.937848089 +0200
+@@ -826,6 +826,7 @@
+ 
+     if (!priv_check[priv_index] || nx_fault)
+       page_fault(ERROR_PROTECTION, laddr, user, rw);
++      /* vérifier si l'accès est en écriture et la page SPP */
+   }
+ 
+   if (BX_CPU_THIS_PTR cr4.get_SMEP() && rw == BX_EXECUTE && !user) {
+@@ -2475,8 +2476,10 @@
+     BX_CPU_THIS_PTR address_xlation.paddress1 = translate_linear(tlbEntry, laddr, user, xlate_rw);
+     BX_CPU_THIS_PTR address_xlation.pages     = 1;
+     if(spp) {
+-      BX_INFO(("spp: start " FMT_PHY_ADDRX " end " FMT_PHY_ADDRX " len %d\n", laddr, laddr + len -1, len));
+-      translate_linear(tlbEntry, laddr + len -1, user, xlate_rw);
++      if (!((tlbEntry->spp_bitmap >> 2*end) & 1)) {
++        BX_INFO(("spp: access denied\n"));
++        exception(BX_OF_EXCEPTION, 0);
++      }
+     }
+ #if BX_SUPPORT_MEMTYPE
+     BX_CPU_THIS_PTR address_xlation.memtype1  = tlbEntry->get_memtype();

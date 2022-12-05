@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.swaptions - [Removing run directory] 
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh swaptions':
+
+   943,720,093,592      cycles                                                        (71.42%)
+ 1,702,496,690,762      instructions              #    1.80  insn per cycle           (85.71%)
+        57,001,999      cache-misses                                                  (85.72%)
+        19,928,244      dTLB-load-misses                                              (85.72%)
+     8,527,494,633      dtlb_load_misses.stlb_hit                                     (85.72%)
+   258,197,705,235      branch-loads                                                  (85.72%)
+     2,843,903,974      branch-loads-misses                                           (57.12%)
+
+     233.993200090 seconds time elapsed
+
+     187.799484000 seconds user
+      46.154784000 seconds sys
+
+

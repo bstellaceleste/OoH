@@ -1,0 +1,4 @@
+Implementation complète d'Intel SPP:
+
+- Write Request: vérification des droits SPP à chaque accès en écriture (fonction de type write_linear_xxx dans cpu/access.c).
+- TLB: ajout du flag "TLB_UserSPP" et du champ "spp_bitmap" pour accélérer les vérifications des pages SPP. 

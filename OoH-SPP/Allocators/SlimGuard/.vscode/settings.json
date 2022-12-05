@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "slimguard-large.h": "c",
+        "slimguard.h": "c",
+        "debug.h": "c",
+        "sll.h": "c"
+    }
+}

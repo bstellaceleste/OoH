@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.dedup - [Nothing to do]
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh dedup':
+
+    84,800,488,815      cycles                                                        (71.88%)
+   138,778,381,166      instructions              #    1.64  insn per cycle           (85.80%)
+       201,501,290      cache-misses                                                  (85.62%)
+         4,688,954      dTLB-load-misses                                              (85.48%)
+       295,130,492      dtlb_load_misses.stlb_hit                                     (85.83%)
+    17,483,374,364      branch-loads                                                  (85.46%)
+       690,514,312      branch-loads-misses                                           (57.61%)
+
+      19.181239461 seconds time elapsed
+
+      15.118231000 seconds user
+       4.026098000 seconds sys
+
+

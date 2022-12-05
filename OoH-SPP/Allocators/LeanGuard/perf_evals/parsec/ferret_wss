@@ -1,0 +1,20 @@
+******************************************************
+Watching PID 7719 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+ERROR: can't open /proc/7719/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 8083 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+ERROR: can't open /proc/8083/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 8245 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+ERROR: can't open /proc/8245/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 8384 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+ERROR: can't open /proc/8384/smaps: No such file or directory at ../evals/wss.pl line 226.
+******************************************************
+Watching PID 7493 page references for every 5 seconds...
+Est(s)     RSS(MB)    PSS(MB)    Ref(MB)
+ERROR: can't open /proc/7493/smaps: No such file or directory at ../evals/wss.pl line 226.

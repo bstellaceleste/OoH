@@ -1,0 +1,34 @@
+# GitIgnore
+*.o
+*.d
+*.d2
+*.opic
+*.a
+*.so
+*.so.[0-9]*
+*.bin
+*.bak
+*.tmp
+# Comment this line if you want to version Wavefront .obj files.
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+*.lo
+
+bochsout.txt

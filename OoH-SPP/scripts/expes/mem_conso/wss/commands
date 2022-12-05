@@ -1,0 +1,28 @@
+grep 33mSlim+GP blackscholes_output | awk '{ print $5 }'
+grep 33mSlim+GP blackscholes_output | awk '{ print $5 }' > blackscholes_secu
+sort blackscholes_secu > blackscholes_secu
+cat blackscholes_secu
+grep 33mSlim+GP blackscholes_output | awk '{ print $5 }' > blackscholes_secu
+sort blackscholes_secu
+sort -n blackscholes_secu > tmp && mv tmp blackscholes_secu
+gedit blackscholes_secu
+awk '{print $1}' blackscholes_secu | sort | uniq -c
+awk '{print $1}' blackscholes_secu | sort -n | uniq -c
+awk '{print $1}' blackscholes_secu | sort -n | uniq -c | wc -l
+
+echo "#freq canary(KB) subpage(KB)\n" > conso_canary_subpg && for freq in 2 3 5 10 15 20 50; do canary=$(grep 33mSlim+GP: freq_$freq/blackscholes_output | wc -l) && sp=$(grep SPPEXPEMEM: plot/subpages/nb_subpg$freq | awk '{ sum+=$5 } END { print sum*1.0/1000 }') && tmp=`echo "scale=2; $canary*1.0/1000" | bc`  && echo "$freq $tmp $sp" >> conso_canary_subpg; done
+
+grep SPPEXPEMEM: plot/subpages/nb_subpg50 |awk '{ print $7 }' | awk '{print $1}' | sort -n | uniq -c | awk '{ print $2,$1/tot*100}' tot=$total | sort -n -r -k2 > plot/distrib_pattern
+
+
+for freq in 2 3 5 10 15 20 50; do cd freq_$freq && for app in blackscholes bodytrack canneal dedup freqmine streamcluster swaptions ferret fluidanimate x264; do sed -i '/Leanguard_improved/,+102d' $app"_output"; done && cd ../; done
+
+
+#remove N lines from file after pattern matched_pattern
+sed -i '/matched_pattern/,+Nd' file
+
+#find the string "User" in tmp and print the current line (print or {print $0}) and finally print the 4th column
+awk '/User/ {print}' tmp | awk '{print $4}'
+
+find string in main.bib and on corresponding lines replace all old caracters by new
+sed -i '/string/s/old /new/g' main.bib

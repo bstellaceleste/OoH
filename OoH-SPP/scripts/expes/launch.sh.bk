@@ -1,0 +1,42 @@
+#!/bin/bash
+cd /home/stella
+
+val=`cat bench`
+
+case "$val" in
+        1)
+            bench="blackscholes"
+            ;;
+        2)
+            bench="canneal"
+            ;;
+        3)
+            bench="dedup"
+            ;;
+        4)
+            bench="freqmine"
+            ;;
+        5)
+            bench="streamcluster"
+            ;;
+	6)
+            bench="swaptions"
+            ;;
+	7)
+            bench="ferret"
+            ;;
+        8)
+            bench="bodytrack"
+            ;;
+        9)
+            bench="fluidanimate"
+            ;;
+        10)
+            bench="x264"
+            ;;
+esac
+
+val=`cat policy`
+
+./slimguard_parsec.sh $val $bench
+

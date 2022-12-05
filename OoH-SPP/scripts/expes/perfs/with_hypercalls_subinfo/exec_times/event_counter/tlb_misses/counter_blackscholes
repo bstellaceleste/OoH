@@ -1,0 +1,21 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.blackscholes - [Removing run directory] 
+
+ Performance counter stats for './ldpreload.sh blackscholes':
+
+   243,156,336,870      cycles                                                        (71.39%)
+   445,411,482,395      instructions              #    1.83  insn per cycle           (85.61%)
+       780,628,241      cache-misses                                                  (85.71%)
+         7,416,984      dTLB-load-misses                                              (85.71%)
+        50,127,800      dtlb_load_misses.stlb_hit                                     (85.71%)
+    54,476,570,345      branch-loads                                                  (85.75%)
+       270,191,618      branch-loads-misses                                           (57.12%)
+
+      54.824511292 seconds time elapsed
+
+      53.643032000 seconds user
+       1.138761000 seconds sys
+
+

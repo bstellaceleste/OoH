@@ -1,0 +1,22 @@
+vm.drop_caches = 3
+vm.overcommit_memory = 1
+[PARSEC] Removing all build and run files:
+[PARSEC] parsec.bodytrack - [Removing run directory] 
+./ldpreload.sh: ligne 14: ./pin.sh: Aucun fichier ou dossier de ce type
+
+ Performance counter stats for './ldpreload.sh bodytrack':
+
+   346,381,995,176      cycles                                                        (71.47%)
+   767,388,258,456      instructions              #    2.22  insn per cycle           (85.74%)
+       137,951,627      cache-misses                                                  (85.76%)
+         5,361,466      dTLB-load-misses                                              (85.75%)
+     1,269,596,558      dtlb_load_misses.stlb_hit                                     (85.74%)
+    72,350,795,586      branch-loads                                                  (85.61%)
+       470,147,769      branch-loads-misses                                           (57.14%)
+
+      81.831761693 seconds time elapsed
+
+      79.724696000 seconds user
+       2.055115000 seconds sys
+
+

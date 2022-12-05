@@ -1,0 +1,82 @@
+diff --git a/arch/x86/kernel/smpboot.c b/arch/x86/kernel/smpboot.c
+index 16703c35a..f8dc49e9c 100644
+--- a/arch/x86/kernel/smpboot.c
++++ b/arch/x86/kernel/smpboot.c
+@@ -1357,6 +1357,7 @@ void __init native_smp_prepare_cpus(unsigned int max_cpus)
+ 		/* Setup local timer */
+ 		x86_init.timers.setup_percpu_clockev();
+ 		return;
++	
+ 	case APIC_VIRTUAL_WIRE:
+ 	case APIC_SYMMETRIC_IO:
+ 		break;
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c
+index e06813d05..6920a53a6 100644
+--- a/arch/x86/kernel/traps.c
++++ b/arch/x86/kernel/traps.c
+@@ -931,12 +931,12 @@ static __always_inline void exc_debug_user(struct pt_regs *regs,
+ 					   unsigned long dr6)
+ {
+ 	bool icebp;
+-	/* SPP natif */
+-	regs->flags &= ~X86_EFLAGS_TF;
++	/* SPP natif 
++	//regs->flags &= ~X86_EFLAGS_TF;
+ 	HYPERVISOR_hvm_op(33, NULL);
+ 	flush_cache_mm(current->mm);
+ 	//flush_tlb_all();
+-	return;
++	return;*/
+ 	/*
+ 	 * If something gets miswired and we end up here for a kernel mode
+ 	 * #DB, we will malfunction.
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index c1143e165..67c34916c 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -96,7 +96,7 @@ typedef struct spp_pool_manager {
+ typedef struct global_pool_manager {
+ 	int total;
+ 	bool is_init;
+-	spp_pool_manager_t tab[30];
++	spp_pool_manager_t tab[31];
+ } global_pool_manager_t;
+ 
+ /* Structure permettant de communiquer avec l'hyperviseur */
+@@ -111,9 +111,9 @@ typedef struct global_pool_manager {
+ // } xen_hvm_spp_bitmap_t;
+ 
+ typedef struct xen_hvm_spp_trash {
++	uint64_t trash[SPP_TRASH_SZ];//
+ 	uint64_t size;
+  	int zeroed:1;
+-	uint64_t trash[SPP_TRASH_SZ];//
+ } xen_hvm_spp_trash_t;
+ 
+ void create_pool_manager(spp_pool_manager_t *pool, int freq);
+diff --git a/mm/memory.c b/mm/memory.c
+index e6fbaf0c3..ddabbbfca 100644
+--- a/mm/memory.c
++++ b/mm/memory.c
+@@ -542,16 +542,16 @@ int get_nb_subpages(uint32_t bitmap)
+ bool fill_pool(spp_pool_t *pool, int nb_pages, int freq, int pattern) 
+ {
+ 	int i;
+-	struct page *p, *pages;
++	struct page *p, *pages = NULL;
+ 	xen_hvm_spp_bitmap_t arg;
+ 	spp_page_list_t *tmp;
+-	bool range = true;
++	bool range = false;
+ 	
+ 	hypercall = 1;
+ 
+-	pages = alloc_pages(GFP_HIGHUSER, SPP_PAGES_ORDER);
+-    // if( !pages )
+-    //     range = false;
++	//pages = alloc_pages(GFP_HIGHUSER, SPP_PAGES_ORDER);
++    if( pages )
++         range = true;
+ 
+ 	for(i = 0; i < nb_pages; i++) 
+ 	{
