@@ -17,7 +17,7 @@ Install from sources:
 
     sudo rm -r tools/qemu-xen-dir/ tools/qemu-xen-traditional-dir/ tools/qemu-xen-build/
     
-    download the archive xen-4.10.0, uncompress it and type : 
+download the original archive [xen-4.10.0](https://downloads.xenproject.org/release/xen/4.10.0/xen-4.10.0.tar.gz), uncompress it and type : 
     
     cp -r xen-4.10.0_clean/tools/hotplug xen-4.10.0_modified/tools
     ./configure
