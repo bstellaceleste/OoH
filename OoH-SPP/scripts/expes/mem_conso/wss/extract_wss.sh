@@ -2,10 +2,10 @@
 
 mkdir -p plot
 #rm plot/*
-for app in raytrace #blackscholes bodytrack canneal dedup freqmine streamcluster swaptions fluidanimate x264
+for app in blackscholes bodytrack dedup freqmine raytrace streamcluster swaptions fluidanimate x264
 do
 	echo "#freq	guarnary(MB) LeanGuard	guard page(MB)" > plot/$app"_wss"
-	for freq in 2 3 5 10 15 20 50 #1 2 3 4 5 6 7 8 9 10
+	for freq in 2 3 5 10 15 20 50
 	do
 		cd freq_$freq
 		grep "Maximum resident set size (kbytes):" $app"_output" | awk '{ print $6*1.0/1000 }' > var #| sed -n '1p ; $p' >> 
