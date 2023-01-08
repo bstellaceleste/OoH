@@ -9,8 +9,8 @@ The following figure presents the design of LeanGuard. -->
 <!-- <img src="leanguard.png" alt="design" width="50%"/> -->
 <!-- XXX below is for LeanGuard -->
 This repo contains all the XXX software stack already patched: 
-* The hypervisor [Xen](Xen-SPP)
-* The guest kernel [Linux](Linux-SPP)
+* The [Xen](Xen-SPP) hypervisor
+* The [Linux](Linux-SPP) guest kernel
 * The [SlimGuard](Allocators/SlimGuard) allocator
 * The [XXX](Allocators/LeanGuard) allocator
 * The [Bochs](Bochs-SPP) emulator
