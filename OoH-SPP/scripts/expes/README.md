@@ -1,4 +1,4 @@
-## Working Set Expes
+## Memory Expes
 > (expes/mem_conso)
 
 - In Fig.9 we get the optimum frequencies for each app, and compile slimguard with each freq and generate lib_app.so 
