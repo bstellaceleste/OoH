@@ -21,8 +21,7 @@ We present two solutions of OoH, namely Shadow PML (noted SPML) and Extended PML
 # Shadow PML (SPML)
 
 To facilitate the tests, the following material is provided (and should be downloaded):
-> Most of the ressources are stored on <a href="https://s3.console.aws.amazon.com/s3/buckets/artifacteval?region=us-east-2&tab=objects#" target="_blank">Amazon S3</a>. You should sign in as an **IAM** user, with the following information: 
-<!---[Amazon S3](https://s3.console.aws.amazon.com/s3/buckets/artifacteval?region=us-east-2&tab=objects#) -->
+> Most of the ressources are stored on [Amazon S3](https://s3.console.aws.amazon.com/s3/buckets/artifacteval?region=us-east-2&tab=objects#). You should sign in as an **IAM** user, with the following information: 
 > 
 > Account ID: **581028953800** 
 > 
