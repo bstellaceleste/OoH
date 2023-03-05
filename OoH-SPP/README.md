@@ -15,3 +15,5 @@ This repo contains all the LeanGuard software stack already patched:
 * The [SlimGuard](Allocators/SlimGuard) allocator
 * The [LeanGuard](Allocators/LeanGuard) allocator
 * The [Bochs](Bochs-SPP) emulator
+
+All scripts to reproduce the paper's figures and experiments are detailed [here](scripts/expes/).
